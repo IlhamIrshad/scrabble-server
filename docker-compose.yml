@@ -1,0 +1,38 @@
+# For Dokploy: create a Compose application, point it at this repo, and this
+# file is picked up as-is. Dokploy's Traefik handles TLS and routing, so no
+# ports are published here - it attaches to the service on 8000 internally.
+#
+# If you deploy as a Dockerfile application instead, set the port to 8000 and
+# skip this file entirely.
+
+services:
+  scrabble-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      # Registration
+      DETECT_MAX_EDGE: "1000"
+      WARP_SIZE: "720"
+      # Classification
+      TEMPLATE_FONT: "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
+      LOW_CONF_THRESHOLD: "0.60"
+      # Diagnostics
+      DEBUG_DIR: "/tmp/scrabble-debug"
+      KEEP_DEBUG_IMAGES: "50"
+    expose:
+      - "8000"
+    # Uncomment to reach it directly during development:
+    # ports:
+    #   - "8000:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          memory: 1G
