@@ -61,6 +61,7 @@ def detect(
 
     t = time.perf_counter()
     bank = classify.bank()
+    value_bank = classify.values()
     rows = [[EMPTY] * N for _ in range(N)]
     tiles: list[CellResult] = []
     low: list[CellResult] = []
@@ -76,12 +77,24 @@ def detect(
             )
             rows[cell.row][cell.col] = BLANK
         else:
-            m = bank.match(cell.glyph)
+            # The tile's own printed point value, as a nudge towards the letters
+            # that carry it. Weak by construction: it is added to the overlap
+            # scores, so it settles a pair the shapes cannot and cannot outvote a
+            # confident read.
+            read = classify.read_value(value_bank, cell.value_glyph)
+            bonus = classify.value_bonus(bank.letters, read.letter, read.best_iou)
+            m = bank.match(cell.glyph, bonus)
+
+            notes = list(cell.notes)
+            if bonus is not None:
+                notes.append(f"point value read as {read.letter}"
+                             f" (overlap {read.best_iou:.2f})")
             result = CellResult(
                 row=cell.row, col=cell.col, letter=m.letter, blank=False,
                 confidence=round(m.confidence, 4), best_iou=round(m.best_iou, 4),
                 candidates=[(ch, round(s, 4)) for ch, s in m.ranked],
-                notes=list(cell.notes),
+                point_value=read.letter if bonus is not None else None,
+                notes=notes,
             )
             rows[cell.row][cell.col] = m.letter or UNKNOWN
 
@@ -110,6 +123,9 @@ def detect(
             corners=[(float(x), float(y)) for x, y in reg.corners],
             area_frac=round(reg.area_frac, 4),
             aspect_skew=round(reg.aspect_skew, 4),
+            grid_score=round(reg.grid_score, 3),
+            grid_alignment=round(reg.grid_alignment, 3),
+            considered=reg.considered,
             grid=grid_info,
         ),
         timing_ms={k: round(v, 2) for k, v in timing.items()},
