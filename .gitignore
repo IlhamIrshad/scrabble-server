@@ -8,3 +8,10 @@ venv/
 .cache/
 /out/
 .DS_Store
+
+# Real board photographs used as test data, and the labels made from them. Kept
+# out of the repository: they are hundreds of megabytes, they are photographs of
+# real games with people and score sheets in them, and the test suite is designed
+# to need no image fixtures - tests that use these skip when the folder is absent.
+/photos/
+/fixtures/
