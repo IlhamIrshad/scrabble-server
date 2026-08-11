@@ -781,10 +781,36 @@ def _score_candidate(small: np.ndarray, quad: np.ndarray) -> tuple[float, float]
 
 
 def find_board(bgr: np.ndarray, corners: np.ndarray | None = None) -> Registration:
-    """Locate the board. If `corners` is given it is trusted and returned."""
+    """The single best guess at where the board is.
+
+    Kept for callers that want one answer. `shortlist` is the better entry point
+    when the caller can judge a candidate by reading it, because the score here is
+    a weak predictor of how well a board will actually read - measured on 163
+    photographs, quads scoring 3 sometimes read better than quads scoring 30.
+    """
+    return shortlist(bgr, corners, limit=1)[0]
+
+
+def shortlist(
+    bgr: np.ndarray, corners: np.ndarray | None = None, limit: int = 1,
+) -> list[Registration]:
+    """Up to `limit` plausible board positions, best guess first.
+
+    Returning several is the point. The lattice score answers "is there a grid
+    here", which is what rejects a turntable, and it is genuinely bad at the finer
+    question of *which* near-miss quad is right: on the test corpus a quad scoring
+    3.2 read 96% of its words correctly while the average quad scoring over 12 read
+    84%. Anything that decides from this score alone will therefore discard boards
+    it could have read.
+
+    So the shortlist is deliberately generous and the caller is expected to choose
+    by warping each one and seeing which yields a sensible board - a judgement made
+    on the tiles themselves rather than on edge projections. See
+    `pipeline._best_reading`.
+    """
     if corners is not None:
         ordered = order_corners(corners)
-        return Registration(ordered, "supplied", 0.0, _aspect_skew(ordered))
+        return [Registration(ordered, "supplied", 0.0, _aspect_skew(ordered))]
 
     h, w = bgr.shape[:2]
     scale = min(1.0, settings.detect_max_edge / float(max(h, w)))
@@ -833,12 +859,20 @@ def find_board(bgr: np.ndarray, corners: np.ndarray | None = None) -> Registrati
     boards.sort(key=lambda c: -c[1])
     considered = [(tag, round(align, 3)) for _, align, tag, _ in boards]
 
-    if boards:
-        score, alignment, name, quad = boards[0]
+    # Near-duplicates waste a caller's reading budget on the same board twice.
+    picked: list[Registration] = []
+    for score, alignment, name, quad in boards:
+        if _already_have(quad, [(n.method, n.corners * scale) for n in picked],
+                         small.shape[:2]):
+            continue
         area_frac = float(cv2.contourArea(quad.astype(np.float32)) / frame_area)
         full = quad / scale                      # back to full-res coords
-        return Registration(full, name, area_frac, _aspect_skew(full),
-                            score, alignment, considered)
+        picked.append(Registration(full, name, area_frac, _aspect_skew(full),
+                                   score, alignment, considered))
+        if len(picked) >= max(1, limit):
+            break
+    if picked:
+        return picked
 
     best = ""
     if scored:

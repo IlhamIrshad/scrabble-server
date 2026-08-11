@@ -71,7 +71,19 @@ class Settings(BaseSettings):
     # way. Setting it low does not degrade gracefully: a near-miss quad is
     # accepted, its grid locks onto the wrong lattice, and every cell is reported
     # one row out - which is worse than reporting no board at all.
-    min_grid_score: float = 12.0
+    # Lowered from 12 to a permissive floor, because measurement on 163 real
+    # photographs showed this score is a weak predictor of whether a board will
+    # read: quads scoring 3 sometimes read better than quads scoring 30, and a
+    # gate at 12 threw away 13 boards that read at 75% of their words or better.
+    # It is now a sanity check that rejects a turntable, not the decision - the
+    # decision is made by reading each shortlisted quad. See
+    # `registration_candidates` and `pipeline._best_reading`.
+    min_grid_score: float = 1.5
+
+    # How many shortlisted board positions to warp and actually read before
+    # choosing. Each one costs a warp, a segmentation and a classification pass,
+    # so this trades time for the thing the geometric score cannot judge.
+    registration_candidates: int = 3
     # Candidates below this fraction of the best periodicity are not ranked
     # against it on alignment, however well they happen to align.
     grid_score_relative: float = 0.25
