@@ -408,7 +408,23 @@ class Settings(BaseSettings):
     # window is this narrow is the honest measure of how far colour and smoothness
     # can separate a blank tile from bare board - it is the weakest test in the
     # pipeline and the first thing to distrust on a board it has not seen.
-    blank_max_roughness: float = 3.1
+    # Least lightness variation, across the whole cell, that a blank tile may show.
+    # A tile is an object with an edge, a bevel and a shine on it; an empty premium
+    # square is flat printing. Over 31 boards checked cell by cell, real blanks spread
+    # 22.6 and the empty squares that pass the colour test spread 14.5. At 15 this
+    # keeps 75 of 76 real blanks and rejects 11 of 18 false ones.
+    #
+    # Note the direction. The test this replaces required a blank to be *smooth*,
+    # below a roughness of 3.1, which is backwards twice over: it measured the face
+    # with the ink removed rather than the cell, and a plain tile is the rougher of
+    # the two rather than the flatter.
+    blank_min_spread: float = 15.0
+    # Below this Delta-E from the tile colour, a blank is accepted on colour alone and
+    # texture is never consulted. It is what keeps the texture test a second opinion
+    # rather than a requirement: a drawn board has no relief, so a blank on one sits
+    # essentially at zero here and is admitted without ever being asked for a bevel it
+    # could not have.
+    blank_sure_delta_e: float = 4.0
 
     # How close a cell's face must be to the measured tile colour, in Delta-E, before
     # a blank tile is reported on it. Much stricter than `tile_face_delta_e`, which

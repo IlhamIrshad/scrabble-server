@@ -612,6 +612,60 @@ def _value_marks(cand: dict, step: float) -> np.ndarray | None:
     return (keep, found) if found else None
 
 
+def _looks_blank(
+    lab: np.ndarray, cell: Cell, size: int, tile_face: np.ndarray
+) -> bool:
+    """Is this inkless, tile-coloured cell a blank tile, or a bare premium square?
+
+    Colour decides it when colour is decisive, and texture is consulted only when it
+    is not. Both halves are needed and neither is enough alone.
+
+    Colour first, because a blank tile is the tile colour and nothing else is - except
+    that a pale premium square is closer to cream than to the green board around it,
+    so a bound loose enough to admit every real blank admits those too.
+
+    Texture second, for the band where colour is merely close. A tile is an object:
+    it stands above the board, and its edge and bevel catch the light. A premium
+    square is flat printing. Over 31 photographed boards checked cell by cell, real
+    blanks vary in lightness by 22.6 across the cell and the empty squares that fool
+    the colour test vary by 14.5.
+
+    Note the direction, which is the opposite of the test this replaced: that one
+    required a blank to be *smooth*, and a plain tile is the rougher of the two.
+
+    Texture is a second opinion rather than a requirement because it is a statement
+    about photographs of physical objects. A drawn board has no relief at all - a
+    blank varies by 4.3 there and bare board by 4.8 - so requiring it outright would
+    make blanks undetectable on any rendering, and would have quietly tied this
+    pipeline to how one camera photographs one tile set.
+    """
+    apart = delta_e(cell.face, tile_face)
+    if apart > settings.blank_face_delta_e:
+        return False
+    if apart <= settings.blank_sure_delta_e:
+        return True
+    return _cell_spread(lab, cell, size) >= settings.blank_min_spread
+
+
+def _cell_spread(lab: np.ndarray, cell: Cell, size: int) -> float:
+    """Spread of lightness over the whole cell, edges and all.
+
+    Deliberately not `Cell.roughness`, which measures the face patch with the ink
+    taken out, and which orders these two populations the *other* way round. This
+    takes in the tile's edge, bevel and whatever highlight sits on it, and that is
+    the point: a real blank tile is a physical object with a lip and a shine, where
+    an empty premium square is flat printing under the same light. Measured over 31
+    boards a person checked, real blanks spread 22.6 and empty squares fooling the
+    colour test spread 14.5.
+
+    Worth recording that the test this replaces required blanks to be *smooth*,
+    which is backwards - a plain tile is the rougher of the two, not the flatter.
+    """
+    x0, y0, x1, y1 = cell_bounds(size, cell.row, cell.col)
+    patch = lab[y0:y1, x0:x1, 0]
+    return float(patch.std()) if patch.size else 0.0
+
+
 def _face_colour(
     lab: np.ndarray, ink: np.ndarray, row: int, col: int, size: int
 ) -> tuple[np.ndarray | None, float, float]:
@@ -852,7 +906,7 @@ def extract_cells(board: np.ndarray) -> tuple[list[Cell], np.ndarray]:
                     cell.value_glyph = normalize_glyph(marks)
             cell.occupied = True
         elif (settings.detect_blanks and colour_decides
-                and delta_e(cell.face, tile_face) <= settings.blank_face_delta_e):
+                and _looks_blank(lab, cell, size, tile_face)):
             # Tile colour and no ink on it. For a set whose blanks are truly plain -
             # Protiles carry no marking at all - that is exactly what a blank is.
             #
