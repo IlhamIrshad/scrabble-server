@@ -68,6 +68,21 @@ def confirmed_photos() -> list[str]:
     return sorted(r["file"] for r in rows if r.get("verdict") == "yes")
 
 
+def only_filter(path: str | None) -> set[str] | None:
+    """A set of filenames to restrict to, from a file with one name per line.
+
+    For working on one board at a time. Reviewing is the scarce resource here, so
+    spending it where it will be acted on beats spreading it evenly.
+    """
+    if not path:
+        return None
+    with open(path, encoding="utf-8") as fh:
+        names = {line.strip() for line in fh if line.strip()}
+    if not names:
+        raise SystemExit(f"{path} lists no photographs")
+    return names
+
+
 # ---------------------------------------------------------------------------
 # rendering
 # ---------------------------------------------------------------------------
@@ -95,11 +110,28 @@ def board_image(image: np.ndarray, result) -> np.ndarray:
 def render(args) -> None:
     os.makedirs(REVIEW, exist_ok=True)
     names = confirmed_photos()
+    only = only_filter(args.only)
+    if only is not None:
+        names = [n for n in names if n in only]
     if args.limit:
         names = names[: args.limit]
-    index = {} if args.again else (_read_json(INDEX) if os.path.exists(INDEX) else {})
+    index = _read_json(INDEX) if os.path.exists(INDEX) else {}
+
+    # A board that has been reviewed is frozen, and `--again` will not touch it. Its
+    # truth is stored as "what was read then, plus the corrections made against it", so
+    # re-reading it under changed code would leave old corrections attached to a new
+    # reading and silently invent ground truth that nobody ever confirmed.
+    frozen = set(load_done())
+    if args.again:
+        # Only forget the boards this run is actually going to redraw. Clearing the
+        # whole index would drop every board outside the filter from the queue, which
+        # looks like nothing at all went wrong until they quietly stop being offered.
+        stale = {n for n in names if n not in frozen}
+        index = {k: v for k, v in index.items() if k not in stale}
 
     for i, name in enumerate(names, 1):
+        if name in frozen:
+            continue
         out = os.path.join(REVIEW, os.path.splitext(name)[0] + ".jpg")
         if name in index and os.path.exists(out) and not args.again:
             continue
@@ -280,7 +312,10 @@ def serve(args) -> None:
     from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 
     index = _read_json(INDEX)
-    names = sorted(index)
+    only = only_filter(args.only)
+    names = [n for n in sorted(index) if only is None or n in only]
+    if not names:
+        raise SystemExit("nothing to review: the filter matched no rendered boards")
     app = FastAPI()
 
     @app.get("/")
@@ -426,6 +461,9 @@ def main() -> None:
     ap.add_argument("--limit", type=int, default=0)
     ap.add_argument("--again", action="store_true", help="re-render everything")
     ap.add_argument("--port", type=int, default=8101)
+    ap.add_argument("--only", default=None,
+                    help="path to a file listing the photographs to work on, one per "
+                         "line - for reviewing a single board type")
     ap.add_argument("--min-seen", type=int, default=10,
                     help="letters read fewer times than this are not rated")
     args = ap.parse_args()

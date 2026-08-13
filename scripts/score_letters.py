@@ -72,10 +72,13 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--limit", type=int, default=0)
     ap.add_argument("--confusions", type=int, default=12)
+    ap.add_argument("--only", default=None,
+                    help="path to a file listing the photographs to score, one per line")
     args = ap.parse_args()
 
     truth = truth_boards()
-    names = sorted(truth)[: args.limit or None]
+    only = review.only_filter(args.only)
+    names = sorted(n for n in truth if only is None or n in only)[: args.limit or None]
     if not names:
         raise SystemExit("no confirmed boards; run review_letters.py first")
 
