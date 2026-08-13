@@ -82,11 +82,29 @@ class Settings(BaseSettings):
 
     # How many shortlisted board positions to warp and actually read before
     # choosing. Each one costs a warp, a segmentation and a classification pass,
-    # so this trades time for the thing the geometric score cannot judge.
-    registration_candidates: int = 3
+    # so this trades time for the thing the geometric score cannot judge. Measured
+    # over 163 photographs: 3 candidates give 107 boards read with 70+ tiles at
+    # about 1.8s each, 6 give 111 at about 2.7s. Turn it down for the WebSocket
+    # path, where frames are cheap and latency is not.
+    registration_candidates: int = 6
     # Candidates below this fraction of the best periodicity are not ranked
     # against it on alignment, however well they happen to align.
     grid_score_relative: float = 0.25
+
+    # Above both of these, a registration is reported as confident. Calibrated
+    # against 160 photographs whose registration a person judged by eye: this bar
+    # marks 60 of them doubtful, and only one of those 60 was in fact correct,
+    # while catching 59 of the 85 that were wrong.
+    #
+    # It is advisory and deliberately not a rejection. Twenty-six wrong boards
+    # still clear it, so "confident" means "nothing looks wrong", never "this is
+    # right"; and being over-eager to reject costs a board that would have read
+    # perfectly. Both numbers describe the *geometry* only - tile count separates
+    # these boards better still, and is not used, because every photograph in that
+    # corpus was an end-of-game board and a rule keyed on tile count would call a
+    # legitimate opening position misregistered.
+    confident_grid_score: float = 3.2
+    confident_grid_alignment: float = 6.8
 
     # Floor on the reference level in the periodicity measure, as a fraction of
     # the mean comb response. A perfectly sharp grid has a zero median response,
@@ -97,6 +115,18 @@ class Settings(BaseSettings):
     # Edge projections are clipped at this quantile before the grid is fitted,
     # so that one very strong edge cannot outweigh sixteen ordinary grid lines.
     grid_line_clip_quantile: float = 0.90
+
+    # How many alternative four-sided readings of one contour to offer. At 1 only
+    # polygon-approximation-or-bounding-rectangle is used, which cannot express a
+    # keystone; at 3 the two shapes that can are added as well.
+    #
+    # Left at 1, because the keystone shapes still measure worse even with the
+    # premium-layout veto in place: scored against 75 boards a person confirmed,
+    # 3 gives 57 within a third of a cell against 71 at 1. The veto stops a shifted
+    # lattice winning, but these extra shapes are evidently wrong in ways that are
+    # not shifts - most likely genuinely poor quads that happen to read well. Worth
+    # revisiting only with a way to tell a good keystone from a bad one.
+    quad_shapes_per_contour: int = 1
 
     # Colour-region proposals: the frame is clustered into this many colours, once
     # per value, and the thumbnail size clustering runs at. Several values because
@@ -262,6 +292,25 @@ class Settings(BaseSettings):
     # Lightness window, in CIELAB L units, around the peak of a cell's histogram
     # whose pixels define that cell's face colour.
     face_mode_window: float = 8.0
+
+    # ---- pinning the board's absolute position ---------------------------
+    # An empty cell whose face differs from the plain board by this much in
+    # Delta-E is taken to be a premium square. Premium squares are printed to
+    # stand out, so the gap is large; this only has to clear shadow and white
+    # balance across one board.
+    premium_delta_e: float = 15.0
+    # Fewest visible premium squares before the layout match is trusted. Late in a
+    # game most of them are under tiles, and a handful of cells is not evidence.
+    premium_min_visible: int = 6
+    # Below this the layout is taken to be actively misplaced rather than merely
+    # unconvincing. Chance is 0.27 (61 premium squares of 225) and a board shifted
+    # by a whole cell measures around 0.15, because a displaced layout is
+    # anti-correlated with the true one rather than independent of it. Sitting
+    # under chance means only clearly-shifted candidates are demoted.
+    premium_reject_below: float = 0.20
+    # A floor, so that a badly placed board is heavily penalised but never scored
+    # at exactly zero - which would make every candidate tie.
+    premium_floor: float = 0.02
 
     # ---- blank tile detection -------------------------------------------
     # A blank tile carries no ink, so there is nothing to classify; it can only

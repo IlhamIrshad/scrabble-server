@@ -53,6 +53,19 @@ class Registration:
     # the wrong quad.
     considered: list[tuple[str, float]] = field(default_factory=list)
 
+    @property
+    def confident(self) -> bool:
+        """Does the geometry look sound enough to trust without a person checking?
+
+        Calibrated against photographs a person judged by eye - see the settings.
+        A false here is worth acting on: of the boards it doubts, all but one in
+        sixty really were misregistered. A true is much weaker, because a quarter
+        of the boards it accepts are wrong too, so it means "nothing looks amiss",
+        never "this is correct".
+        """
+        return (self.grid_score >= settings.confident_grid_score
+                and self.grid_alignment >= settings.confident_grid_alignment)
+
 
 class RegistrationError(RuntimeError):
     pass
@@ -102,11 +115,105 @@ def _quad_from_contour(contour: np.ndarray) -> np.ndarray | None:
             return approx.reshape(4, 2).astype(np.float32)
     # Fall back to the minimum-area rectangle, which is always a quad. This
     # copes with a board whose corners are rounded or partly occluded.
+    #
+    # Its weakness is real and not yet fixed: a rectangle's opposite sides are
+    # parallel by construction, so it cannot describe a board photographed from a
+    # low angle, whose sides converge. The warp then stays trapezoidal, the cell
+    # pitch is not uniform, and no lattice fits however good the rest is.
+    #
+    # Offering shapes that *can* express a keystone - the hull's four longest sides
+    # extended and intersected, and the hull trimmed to its four dominant corners -
+    # was tried and withdrawn. It helped some photographs and made things worse
+    # overall: scored against 75 boards a person had confirmed correct, 13 moved
+    # more than a third of a cell and 7 by more than a whole cell. The reason is
+    # that the selector cannot police it. Candidates are chosen by warping each one
+    # and seeing which reads best, and that measure is *blind to whole-cell shifts*
+    # - a lattice one cell out still centres every glyph perfectly, in the wrong
+    # cell. More candidate shapes therefore means more chances to win with a
+    # shifted lattice. Fixing the keystone needs a selector that pins the board's
+    # absolute position first; see `scripts/score_corners.py` for the measurement
+    # that showed this.
     rect = cv2.minAreaRect(hull)
     box = cv2.boxPoints(rect).astype(np.float32)
     if cv2.contourArea(box) > 0.55 * cv2.contourArea(hull):
         return box
     return None
+
+
+def _trim_hull_to_quad(hull: np.ndarray) -> np.ndarray | None:
+    """Drop hull vertices, cheapest corner first, until four remain.
+
+    Polygon approximation asks for a tolerance and returns whatever number of sides
+    that happens to produce; this asks for four sides directly, which is what we
+    actually know about a board. Repeatedly discarding whichever vertex encloses the
+    least area converges on the four dominant corners of a ragged outline.
+    """
+    pts = hull.reshape(-1, 2).astype(np.float64)
+    if len(pts) < 4:
+        return None
+    while len(pts) > 4:
+        before, after = np.roll(pts, 1, axis=0), np.roll(pts, -1, axis=0)
+        u, v = pts - before, after - before
+        # Twice the triangle's area, written out because numpy 2 removed the
+        # two-dimensional form of np.cross.
+        lost = np.abs(u[:, 0] * v[:, 1] - u[:, 1] * v[:, 0])
+        pts = np.delete(pts, int(np.argmin(lost)), axis=0)
+    return pts.astype(np.float32)
+
+
+def _quad_from_long_edges(hull: np.ndarray) -> np.ndarray | None:
+    """Extend the hull's four longest sides and intersect them.
+
+    This is the one that can express a keystone, and the reason it is worth having:
+    `minAreaRect` is a rectangle, so its opposite sides are parallel by
+    construction and it cannot describe a board photographed from a low angle,
+    whose sides converge. Fitting a rectangle to a trapezium leaves a warp that is
+    still trapezoidal - the cell pitch is then not uniform and no lattice fits,
+    however good everything downstream is.
+
+    Treating the sides as *lines* and intersecting them recovers the true corners,
+    including where a corner is rounded, occluded, or outside the frame entirely.
+    """
+    pts = hull.reshape(-1, 2).astype(np.float64)
+    if len(pts) < 4:
+        return None
+    nxt = np.roll(pts, -1, axis=0)
+    lengths = np.linalg.norm(nxt - pts, axis=1)
+    # Kept in cyclic order, so consecutive pairs really are adjacent sides.
+    longest = sorted(int(i) for i in np.argsort(-lengths)[:4])
+    if len(longest) < 4:
+        return None
+
+    corners = []
+    for i in range(4):
+        a, b = longest[i - 1], longest[i]
+        point = _intersect((pts[a], nxt[a]), (pts[b], nxt[b]))
+        if point is None:
+            return None
+        corners.append(point)
+    quad = np.array(corners, dtype=np.float32)
+    return quad if cv2.isContourConvex(order_corners(quad).reshape(-1, 1, 2)) else None
+
+
+def _quads_from_contour(contour: np.ndarray) -> list[np.ndarray]:
+    """Every reasonable reading of one contour as a four-sided board.
+
+    Several rather than one, because which method is right depends on the shape and
+    there is no way to tell in advance - and because the caller now judges a quad by
+    warping it, reading the board, and checking the premium squares fall where the
+    printed layout says they should. That last test is what makes offering more
+    shapes safe: an earlier attempt at this made things worse, because the selector
+    of the day could not tell a good quad from one a whole cell out.
+    """
+    hull = cv2.convexHull(contour)
+    out: list[np.ndarray] = []
+    for quad in (_quad_from_contour(contour), _quad_from_long_edges(hull),
+                 _trim_hull_to_quad(hull)):
+        if quad is None:
+            continue
+        if not any(np.abs(quad - kept).max() < 2.0 for kept in out):
+            out.append(quad)
+    return out
 
 
 def _fills_frame(quad: np.ndarray, shape: tuple[int, int]) -> bool:
@@ -140,15 +247,25 @@ def _quads(mask: np.ndarray, shape: tuple[int, int], limit: int) -> list[np.ndar
         if not (settings.min_board_area_frac * frame_area
                 <= area <= settings.max_board_area_frac * frame_area):
             continue
-        quad = _quad_from_contour(c)
-        if quad is None:
+        primary = _quad_from_contour(c)
+        if primary is None:
             continue
-        ordered = order_corners(quad)
-        if _aspect_skew(ordered) > settings.max_board_aspect_skew:
-            continue
-        if _fills_frame(ordered, shape):
-            continue
-        scored.append((area, ordered))
+        shapes = [primary]
+        if settings.quad_shapes_per_contour > 1:
+            shapes = _quads_from_contour(c)[: settings.quad_shapes_per_contour]
+        for quad in shapes:
+            ordered = order_corners(quad)
+            if _aspect_skew(ordered) > settings.max_board_aspect_skew:
+                continue
+            if _fills_frame(ordered, shape):
+                continue
+            # A quad built by extending sides can reach past the contour it came
+            # from, so its own area is what has to be plausible, not the contour's.
+            own = cv2.contourArea(ordered.astype(np.float32))
+            if not (settings.min_board_area_frac * frame_area
+                    <= own <= settings.max_board_area_frac * frame_area):
+                continue
+            scored.append((own, ordered))
     scored.sort(key=lambda t: -t[0])
     return [q for _, q in scored[:limit]]
 

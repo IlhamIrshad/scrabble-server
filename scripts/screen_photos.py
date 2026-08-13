@@ -39,8 +39,8 @@ import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from app.config import settings  # noqa: E402
-from app.vision import classify, grid, pipeline, registration  # noqa: E402
+from app.config import settings
+from app.vision import classify, grid, pipeline, registration
 
 STILLS = {".jpg", ".jpeg", ".png", ".heic", ".heif", ".bmp", ".webp"}
 
@@ -140,7 +140,7 @@ def measured_colours(cells: list[grid.Cell]) -> tuple[str, str]:
     board = grid._dominant_colour(
         [c.face for c in cells if not c.occupied and c.face is not None], tol
     )
-    fmt = lambda v: "" if v is None else ",".join(f"{x:.1f}" for x in v)  # noqa: E731
+    fmt = lambda v: "" if v is None else ",".join(f"{x:.1f}" for x in v)
     return fmt(tile), fmt(board)
 
 
@@ -251,7 +251,7 @@ def main() -> None:
             fh.flush()          # so a long run can be watched, and survives a kill
             flag = "" if row["ok"] else f"  <-- {row['reason']}"
             print(f"  [{i:3d}/{len(photos)}] {row['file'][:34]:36s} "
-                  f"tiles={str(row['tiles']):>3} score={str(row['grid_score']):>7} "
+                  f"tiles={row['tiles']!s:>3} score={row['grid_score']!s:>7} "
                   f"{row['ms']}ms{flag}", flush=True)
 
     report(rows, lexicon, args.cluster_tol, args.out)
