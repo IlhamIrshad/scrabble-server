@@ -409,6 +409,16 @@ class Settings(BaseSettings):
     # can separate a blank tile from bare board - it is the weakest test in the
     # pipeline and the first thing to distrust on a board it has not seen.
     blank_max_roughness: float = 3.1
+
+    # How close a cell's face must be to the measured tile colour, in Delta-E, before
+    # a blank tile is reported on it. Much stricter than `tile_face_delta_e`, which
+    # governs a cell that also has a glyph on it to corroborate the claim; here the
+    # colour is the entire evidence. Set from the two populations it has to separate,
+    # over 43 boards a person checked cell by cell: real tiles sit a median 3.2 away
+    # with a 90th percentile of 6.3, and the empty squares that fool a looser bound sit
+    # at 13.1 - nearly all of them pale premium squares, which really are closer to
+    # cream than to the green board around them.
+    blank_face_delta_e: float = 8.0
     # Tiles and board must differ by at least this much Delta-E before any blank
     # is reported. A cream tile on a cream board is genuinely not separable, and
     # guessing there invents tiles that are not on the board.
@@ -454,6 +464,18 @@ class Settings(BaseSettings):
     # collect them wholesale and it climbs from 133 to 213 against an expected 141.
     # It is worth exactly as much as a tiebreak and no more.
     counter_bonus: float = 0.05
+
+    # Added to a letter's overlap score when the tile shows two digit-sized marks and
+    # that letter is worth ten. Offered only in that direction: one mark describes
+    # twenty-four letters and says next to nothing.
+    #
+    # Swept against 43 boards checked cell by cell. At 0.05 the 'O' read where a 'Q'
+    # belonged falls from 22 to 9 and total errors from 197 to 188. Larger is worse in
+    # a way worth recording: at 0.10 that confusion nearly vanishes, 22 down to 1, but
+    # 26 tiles that were not a 'Q' become one, and at 0.20 the board falls apart at 307
+    # errors. Two marks is good evidence and not decisive evidence - a broken digit or
+    # a speck beside the letter counts as two just as readily as a "10" does.
+    digit_count_bonus: float = 0.05
     glyph_pad: int = 4
     # Folder of pictures of real tiles, one per letter, named A.png ... Z.png. Used
     # in preference to a rendered font when present, because a reference glyph only

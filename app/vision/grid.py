@@ -93,6 +93,9 @@ class Cell:
     # the tile's printed point value, normalised the same way, when any mark that
     # could be one was found beside the letter
     value_glyph: np.ndarray | None = None
+    # How many digit-sized marks were found beside the letter. Two means a value of
+    # 10, which in English narrows the tile to 'Q' or 'Z'.
+    value_marks: int = 0
     occupied: bool = False
     is_blank: bool = False
     mean_l: float = 0.0
@@ -565,7 +568,14 @@ def _cell_glyph(
 
 
 def _value_marks(cand: dict, step: float) -> np.ndarray | None:
-    """The tile's printed point value, as one mask, or None if nothing was found.
+    """The point value as (mask, how many marks), or None if nothing was found.
+
+    The count is worth as much as the mask and is far more robust. Recognising which
+    digit is printed on eight pixels is unreliable, and a misrecognised digit actively
+    misleads - offered to every letter it measured *worse* than no digit at all. But
+    counting the marks asks a question those pixels can answer: only a value of 10 is
+    two of them, and in English only 'Q' and 'Z' are worth 10.
+
 
     Everything in the cell that is not the letter and is the size of a digit,
     unioned: a value of 10 is two components, and their combined width is a good
@@ -599,7 +609,7 @@ def _value_marks(cand: dict, step: float) -> np.ndarray | None:
         keep |= (labels == i).astype(np.uint8) * 255
         found += 1
 
-    return keep if found else None
+    return (keep, found) if found else None
 
 
 def _face_colour(
@@ -739,53 +749,6 @@ def premium_agreement(cells: list[Cell]) -> tuple[float, int]:
     return len(detected & PREMIUM) / len(detected), len(detected)
 
 
-def _detect_blanks(
-    cells: dict[tuple[int, int], Cell],
-    tile_face: np.ndarray | None,
-    board_face: np.ndarray | None,
-) -> None:
-    """Mark smooth cells whose face matches the tile colour as blank tiles.
-
-    A blank tile face is featureless, so it has a low coefficient of variance -
-    but so does bare board, which is the whole difficulty. The separating signal
-    is colour, and now that the tile colour has been measured from the letters on
-    this very board, the test is simply which of the two measured colours the
-    cell's face is closer to. That replaces a hand-tuned saturation delta and hue
-    window which described one board and one tile set, and quietly reported half
-    a cream board's empty squares as blanks.
-
-    If the tiles and the board are too close in colour to tell apart, no blank is
-    reported and every cell says so. A wrong blank is a tile that is not there.
-
-    Note that even a perfect detection only tells you a blank is present - which
-    letter it was played as is not in the pixels at all.
-    """
-    if tile_face is None or board_face is None:
-        return
-
-    separation = delta_e(tile_face, board_face)
-    if separation < settings.blank_min_separation:
-        for c in cells.values():
-            if not c.occupied:
-                c.notes.append(
-                    f"blank detection off: tile and board faces differ by only "
-                    f"{separation:.0f} Delta-E"
-                )
-        return
-
-    for c in cells.values():
-        if c.occupied or c.roughness > settings.blank_max_roughness:
-            continue
-        if not _is_tile(c.face, tile_face, board_face):
-            continue
-        c.occupied = True
-        c.is_blank = True
-        c.notes.append(
-            f"blank: face is {delta_e(c.face, tile_face):.0f} Delta-E from the "
-            f"tile colour and {delta_e(c.face, board_face):.0f} from the board"
-        )
-
-
 def _bootstrap_ink(board: np.ndarray, step: float, size: int) -> tuple[np.ndarray, set]:
     """A first, rough pass, whose only job is to find the tile colour.
 
@@ -846,6 +809,13 @@ def extract_cells(board: np.ndarray) -> tuple[list[Cell], np.ndarray]:
         for key in lettered_keys:
             cells[key].notes.append("tile colour not established; shape tests only")
 
+    # Whether the two measured colours are far enough apart to tell a tile from bare
+    # board at all. Everything below turns on it, so it is settled once here.
+    separation = (delta_e(tile_face, board_face)
+                  if tile_face is not None and board_face is not None else None)
+    colour_decides = (separation is not None
+                      and separation >= settings.blank_min_separation)
+
     ink = np.zeros((size, size), np.uint8)
     for key, cell in cells.items():
         if not _is_tile(cell.face, tile_face, board_face):
@@ -858,17 +828,59 @@ def extract_cells(board: np.ndarray) -> tuple[list[Cell], np.ndarray]:
                     f"from the tile colour"
                 )
             continue
-        cand = _cell_glyph(lab[:, :, 0], cell, size, step, ink)
-        if cand is None:
-            continue
-        cell.bbox = cand["bbox"]
-        cell.glyph = normalize_glyph(cand["mask"])
-        if settings.use_point_value:
-            marks = _value_marks(cand, step)
-            cell.value_glyph = None if marks is None else normalize_glyph(marks)
-        cell.occupied = True
 
-    if settings.detect_blanks:
-        _detect_blanks(cells, tile_face, board_face)
+        # A cell holds a tile because of its *colour*, and holds a letter because a
+        # glyph was found on it. Those are two questions, and answering the first with
+        # the second cost 110 tiles across 43 boards a person checked: a blank Protile
+        # carries no ink whatsoever, and a thin 'I' or 'L' frequently yields no usable
+        # glyph either, so both were discarded as though the square were bare.
+        #
+        # Getting this wrong in this direction is the worst case available. A tile
+        # reported with the wrong letter is visible and one tap to fix; a tile that was
+        # never reported is invisible, and nothing downstream can tell that the board
+        # it is scoring has a hole in it.
+        cand = _cell_glyph(lab[:, :, 0], cell, size, step, ink)
+        if cand is not None:
+            cell.bbox = cand["bbox"]
+            cell.glyph = normalize_glyph(cand["mask"])
+            # Always counted, because the count is cheap and useful; the digit's shape
+            # is only normalised when something asks to read it.
+            found = _value_marks(cand, step)
+            if found is not None:
+                marks, cell.value_marks = found
+                if settings.use_point_value:
+                    cell.value_glyph = normalize_glyph(marks)
+            cell.occupied = True
+        elif (settings.detect_blanks and colour_decides
+                and delta_e(cell.face, tile_face) <= settings.blank_face_delta_e):
+            # Tile colour and no ink on it. For a set whose blanks are truly plain -
+            # Protiles carry no marking at all - that is exactly what a blank is.
+            #
+            # Held to a stricter colour match than a lettered tile, because there is no
+            # glyph here to corroborate anything and the whole claim rests on the
+            # colour. Measured over the boards a person checked, real tiles sit 3.2
+            # Delta-E from the measured tile colour and empty squares that fooled the
+            # looser test sit at 13.1 - mostly pale premium squares, which are nearer
+            # cream than they are to the green board around them.
+            #
+            # Smoothness used to be required instead and was the wrong test twice over:
+            # a plain tile still has a bevel, a moulding and highlights, so 44 real
+            # blanks failed a roughness bar their colour had already settled - and
+            # roughness barely separates the two populations anyway, at 5.7 against 9.4.
+            cell.occupied = True
+            cell.is_blank = True
+            cell.notes.append(
+                f"blank: tile colour, no ink; face is "
+                f"{delta_e(cell.face, tile_face):.0f} Delta-E from the tile colour "
+                f"and {delta_e(cell.face, board_face):.0f} from the board"
+            )
+
+    if settings.detect_blanks and not colour_decides:
+        note = (f"blank detection off: tile and board faces differ by only "
+                f"{separation:.0f} Delta-E" if separation is not None
+                else "blank detection off: tile or board colour not established")
+        for cell in cells.values():
+            if not cell.occupied:
+                cell.notes.append(note)
 
     return [cells[(r, c)] for r in range(N) for c in range(N)], ink

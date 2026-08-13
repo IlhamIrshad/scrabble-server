@@ -272,6 +272,12 @@ def detect(
             topology = bank.counter_bonus(enclosed)
             bonus = topology if bonus is None else bonus + topology
 
+            # And whether its printed value has two digits, which neither overlap nor
+            # topology can see - it is the only evidence that separates Q from O.
+            digits = classify.digit_count_bonus(bank.letters, cell.value_marks)
+            if digits is not None:
+                bonus = digits if bonus is None else bonus + digits
+
             m = bank.match(cell.glyph, bonus)
 
             notes = list(cell.notes)

@@ -541,6 +541,29 @@ def read_value(values: TemplateBank | None, glyph: np.ndarray | None) -> Match:
     return values.match(glyph)
 
 
+def digit_count_bonus(letters: list[str], marks: int) -> np.ndarray | None:
+    """Additive evidence from *how many* digits the tile's value has, not which.
+
+    The cheapest reliable thing the point value says. Reading the digit itself was
+    tried and measured worse than ignoring it: at this resolution the digit is a
+    handful of pixels, and a misread one is confident evidence for the wrong letter.
+    Counting the marks needs no recognition at all - two marks means a two-digit
+    value, and in English only 'Q' and 'Z' are worth ten.
+
+    It earns its place on the one confusion that dominates. 'Q' is an 'O' with a small
+    tail, which overlap cannot see and hole-counting cannot either, since both enclose
+    exactly one; over 43 boards a person checked cell by cell, 'O' was read where 'Q'
+    belonged 22 times, the largest single error left. The count is orthogonal to both.
+    """
+    if marks < 2:
+        # One mark is the ordinary case and says almost nothing - most letters have a
+        # single-digit value - so no evidence is offered rather than a bonus for
+        # twenty-four letters at once.
+        return None
+    two_digit = np.array([POINTS.get(ch, 0) >= 10 for ch in letters], dtype=np.float32)
+    return settings.digit_count_bonus * two_digit
+
+
 def value_bonus(letters: list[str], value: str | None, iou: float) -> np.ndarray | None:
     """Additive per-letter evidence from a point value that has been read.
 

@@ -45,6 +45,11 @@ INDEX = os.path.join(REVIEW, "index.json")
 VERDICTS = os.path.join("fixtures", "registration_verdicts.csv")
 CORRECTIONS = os.path.join("fixtures", "letter_corrections.csv")
 DONE = os.path.join("fixtures", "letter_reviewed.csv")
+# Boards set aside rather than judged. Kept apart from DONE and never counted: on a
+# confirmed board an unmarked cell means "this read correctly", and a board abandoned
+# half way through has unmarked cells that mean nothing at all. Folding the two
+# together would quietly credit every cell the reviewer never got to.
+SKIPPED = os.path.join("fixtures", "letter_skipped.csv")
 BOARD_PX = 900
 EMPTY, BLANK = ".", "?"
 
@@ -152,7 +157,8 @@ PAGE = """<!doctype html><meta charset=utf-8>
 <div id=bar><span id=status>loading…</span></div>
 <div id=wrap><img id=shot><div id=cells></div></div>
 <div id=hint>
- <button onclick="commit()">Enter — board is correct, next</button>
+ <button onclick="commit()">Enter — confirm, next</button>
+ <button onclick="skip()">S — skip this board</button>
  <button onclick="back()">← previous</button>
  <span class=k>click a cell, then type the right letter &nbsp;·&nbsp;
  <b>.</b> empty &nbsp; <b>?</b> blank &nbsp; <b>Esc</b> unselect</span>
@@ -169,7 +175,7 @@ async function load(){
   img.onload=draw;
   document.getElementById('status').innerHTML='<b>'+cur.file+'</b> &nbsp; '+cur.index+'/'+cur.total+
     ' &nbsp; tiles <b>'+cur.tiles+'</b> &nbsp; <span class=k>'+cur.low.length+' flagged</span>'+
-    ' &nbsp;·&nbsp; <span class=done>'+cur.judged+' boards done</span>';
+    ' &nbsp;·&nbsp; <span class=done>'+cur.judged+' done</span>, '+cur.skipped+' skipped';
 }
 
 function draw(){
@@ -214,11 +220,18 @@ async function commit(){
     body:JSON.stringify({file:cur.file, fixes:Object.values(fixes)})});
   load();
 }
+async function skip(){
+  if(!cur||cur.done) return;
+  await fetch('/skip',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({file:cur.file})});
+  load();
+}
 async function back(){ await fetch('/back',{method:'POST'}); load(); }
 
 document.addEventListener('keydown',e=>{
   if(e.key==='Enter'){ commit(); return; }
   if(e.key==='ArrowLeft'){ back(); return; }
+  if(!sel && (e.key==='s'||e.key==='S')){ skip(); return; }
   if(e.key==='Escape'){ if(sel) sel.classList.remove('sel'); sel=null; return; }
   if(!sel) return;
   if(e.key==='.'||e.key==='Delete'||e.key==='Backspace'){ setTruth('.'); return; }
@@ -231,11 +244,35 @@ load();
 """
 
 
-def load_done() -> list[str]:
-    if not os.path.exists(DONE):
+def _load_list(path: str) -> list[str]:
+    if not os.path.exists(path):
         return []
-    with open(DONE, encoding="utf-8") as fh:
+    with open(path, encoding="utf-8") as fh:
         return [r[0] for r in csv.reader(fh) if r and r[0] != "file"]
+
+
+def _append(path: str, name: str) -> None:
+    first = not os.path.exists(path)
+    with open(path, "a", newline="", encoding="utf-8") as fh:
+        w = csv.writer(fh)
+        if first:
+            w.writerow(["file"])
+        w.writerow([name])
+
+
+def _rewrite(path: str, names: list[str]) -> None:
+    with open(path, "w", newline="", encoding="utf-8") as fh:
+        w = csv.writer(fh)
+        w.writerow(["file"])
+        w.writerows([[n] for n in names])
+
+
+def load_done() -> list[str]:
+    return _load_list(DONE)
+
+
+def load_skipped() -> list[str]:
+    return _load_list(SKIPPED)
 
 
 def serve(args) -> None:
@@ -256,19 +293,21 @@ def serve(args) -> None:
 
     @app.get("/next")
     def nxt():
-        done = load_done()
-        todo = [n for n in names if n not in set(done)]
+        done, skipped = load_done(), load_skipped()
+        seen = set(done) | set(skipped)
+        todo = [n for n in names if n not in seen]
         if not todo:
             fixes = sum(1 for _ in _corrections())
             return JSONResponse({"done": True, "summary":
-                                 f"{len(done)} boards confirmed, {fixes} cells corrected"})
+                                 f"{len(done)} boards confirmed, {fixes} cells "
+                                 f"corrected, {len(skipped)} skipped"})
         name = todo[0]
         facts = index[name]
         return JSONResponse({
             "done": False, "file": name, "image": facts["image"],
             "board": facts["board"], "low": facts["low"], "tiles": facts["tiles"],
             "index": len(names) - len(todo) + 1, "total": len(names),
-            "judged": len(done),
+            "judged": len(done), "skipped": len(skipped),
         })
 
     @app.post("/vote")
@@ -281,25 +320,34 @@ def serve(args) -> None:
                 w.writerow(["file", "row", "col", "read", "truth"])
             for f in body.get("fixes", []):
                 w.writerow([name, f["row"], f["col"], f["read"], f["truth"]])
-        first = not os.path.exists(DONE)
-        with open(DONE, "a", newline="", encoding="utf-8") as fh:
-            w = csv.writer(fh)
-            if first:
-                w.writerow(["file"])
-            w.writerow([name])
+        _append(DONE, name)
+        return {"ok": True}
+
+    @app.post("/skip")
+    async def skip(body: dict):
+        _append(SKIPPED, body["file"])
         return {"ok": True}
 
     @app.post("/back")
     def back():
-        """Un-confirm the most recent board, and drop the corrections made on it."""
-        done = load_done()
-        if not done:
+        """Undo the most recent board, whether it was confirmed or skipped."""
+        done, skipped = load_done(), load_skipped()
+        if not done and not skipped:
             return {"ok": False}
-        last = done[-1]
-        with open(DONE, "w", newline="", encoding="utf-8") as fh:
-            w = csv.writer(fh)
-            w.writerow(["file"])
-            w.writerows([[n] for n in done[:-1]])
+        # Which one to undo is decided by position in the queue, not by which file was
+        # written last: the reviewer means "the board I just saw", and confirmed and
+        # skipped boards interleave.
+        order = {n: i for i, n in enumerate(names)}
+        last_done = max(done, key=lambda n: order.get(n, -1), default=None)
+        last_skip = max(skipped, key=lambda n: order.get(n, -1), default=None)
+        if last_skip is not None and (
+            last_done is None or order.get(last_skip, -1) > order.get(last_done, -1)
+        ):
+            _rewrite(SKIPPED, [n for n in skipped if n != last_skip])
+            return {"ok": True}
+
+        last = last_done
+        _rewrite(DONE, [n for n in done if n != last])
         rows = [r for r in _corrections() if r["file"] != last]
         with open(CORRECTIONS, "w", newline="", encoding="utf-8") as fh:
             w = csv.writer(fh)
@@ -311,7 +359,7 @@ def serve(args) -> None:
     import uvicorn
     print(f"\n  open  http://127.0.0.1:{args.port}\n"
           f"  click a cell, then type the right letter; '.' empty, '?' blank\n"
-          f"  Enter confirms the board and moves on; <- goes back\n"
+          f"  Enter confirms and moves on; S skips this board; <- goes back\n"
           f"  saved to {CORRECTIONS} as you go; Ctrl-C to stop\n")
     uvicorn.run(app, host="127.0.0.1", port=args.port, log_level="warning")
 
@@ -349,8 +397,16 @@ def report(args) -> None:
         confusion[(f["read"], f["truth"])] += 1
 
     tiles = sum(read_counts.values())
+    skipped = load_skipped()
     print(f"{len(done)} boards confirmed, {tiles} tiles read, "
-          f"{len(fixes)} corrected -> {1 - len(fixes) / max(tiles, 1):.2%} per-tile accuracy\n")
+          f"{len(fixes)} corrected -> {1 - len(fixes) / max(tiles, 1):.2%} per-tile accuracy")
+    if skipped:
+        # Named rather than merely counted, because a skip is usually a judgement -
+        # too messy, too many leftovers - and a run of them says something about the
+        # boards themselves that the accuracy figure deliberately excludes.
+        print(f"{len(skipped)} boards skipped and not counted: "
+              + ", ".join(sorted(skipped)[:6]) + (" ..." if len(skipped) > 6 else ""))
+    print()
 
     print("  worst letters, as read:")
     rows = [(wrong[ch] / read_counts[ch], ch, wrong[ch], read_counts[ch])
