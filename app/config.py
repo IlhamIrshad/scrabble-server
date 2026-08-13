@@ -308,6 +308,7 @@ class Settings(BaseSettings):
     # anti-correlated with the true one rather than independent of it. Sitting
     # under chance means only clearly-shifted candidates are demoted.
     premium_reject_below: float = 0.20
+
     # A floor, so that a badly placed board is heavily penalised but never scored
     # at exactly zero - which would make every candidate tie.
     premium_floor: float = 0.02

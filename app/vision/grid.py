@@ -44,20 +44,44 @@ _TRIPLE_LETTER = [(1, 5), (5, 1), (5, 5)]
 _DOUBLE_LETTER = [(0, 3), (3, 0), (2, 6), (6, 2), (6, 6), (7, 3), (3, 7)]
 
 
-def _premium_squares() -> frozenset[tuple[int, int]]:
+def _unfold(seed: list[tuple[int, int]]) -> frozenset[tuple[int, int]]:
     out: set[tuple[int, int]] = set()
-    for coords in (_TRIPLE_WORD, _DOUBLE_WORD, _TRIPLE_LETTER, _DOUBLE_LETTER):
-        for r, c in coords:
-            for rr, cc in ((r, c), (r, N - 1 - c), (N - 1 - r, c), (N - 1 - r, N - 1 - c)):
-                out.add((rr, cc))
-                out.add((cc, rr))
-                out.add((N - 1 - cc, rr))
-                out.add((cc, N - 1 - rr))
-    out.add((7, 7))                     # the centre star is a double word
+    for r, c in seed:
+        for rr, cc in ((r, c), (r, N - 1 - c), (N - 1 - r, c), (N - 1 - r, N - 1 - c)):
+            out.add((rr, cc))
+            out.add((cc, rr))
+            out.add((N - 1 - cc, rr))
+            out.add((cc, N - 1 - rr))
     return frozenset(out)
 
 
-PREMIUM = _premium_squares()
+# Kept per type rather than merged, because the types carry far more information
+# than their union does: "is this square premium?" narrows a cell to one of 61
+# positions, where "is it a triple word?" narrows it to one of eight.
+#
+# That was tried, as a way of *solving* for the board's position rather than only
+# checking it - group the visible premium squares by colour, then search jointly
+# over every assignment of colour groups to types and every offset, so the layout
+# decides which colour is which rather than the other way round. It measured well
+# in the one respect that matters for safety: on twelve correctly-registered boards
+# it reported "no shift" twelve times, never inventing a correction. But given a
+# board that really was shifted it recovered the right offset only 19 times in 48,
+# and confidence did not separate its right answers from its wrong ones - one board
+# was confidently wrong at a score of 0.74. As a veto it scored exactly the same 71
+# of 75 as the plain fraction below, at several times the cost, so it was withdrawn.
+#
+# Two ambiguities are intrinsic and would have to be dealt with first: the layout is
+# symmetric under transposition, so a row shift can look like a column shift; and
+# the double-word diagonal maps onto itself under a diagonal shift, so (1,1) is
+# genuinely hard to distinguish from no shift at all. The crude colour grouping is
+# the other limit, and the easier of the two to improve.
+PREMIUM_TYPES: dict[str, frozenset[tuple[int, int]]] = {
+    "TW": _unfold(_TRIPLE_WORD),
+    "DW": _unfold(_DOUBLE_WORD) | {(7, 7)},   # the centre star is a double word
+    "TL": _unfold(_TRIPLE_LETTER),
+    "DL": _unfold(_DOUBLE_LETTER),
+}
+PREMIUM = frozenset().union(*PREMIUM_TYPES.values())
 
 
 @dataclass
