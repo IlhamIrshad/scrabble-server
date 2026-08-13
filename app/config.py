@@ -22,8 +22,15 @@ class Settings(BaseSettings):
     # runs on the small image; the warp runs on the full-resolution original.
     detect_max_edge: int = 1000
 
-    # Output size of the rectified board, in pixels. 720 => 48 px per cell.
-    warp_size: int = 720
+    # Output size of the rectified board, in pixels. 1080 => 72 px per cell.
+    #
+    # Raised from 720 once real photographs arrived: they are about 145 px per cell
+    # at the source, so warping to 48 discarded two thirds of the detail that had
+    # been captured. Measured over 60 of them, words read correctly went from 79.4%
+    # to 86.5% for 19% more time, and impossible letter counts fell from 55 boards
+    # to 48. Going on to 96 px per cell gained 0.4 of a point for another 14% - so
+    # this is where the curve flattens, not a cap.
+    warp_size: int = 1080
 
     # Size candidates are trial-warped to when being scored. Only needs to be big
     # enough to resolve grid lines, and every candidate pays for it. 360 gives 24
@@ -87,6 +94,13 @@ class Settings(BaseSettings):
     # about 1.8s each, 6 give 111 at about 2.7s. Turn it down for the WebSocket
     # path, where frames are cheap and latency is not.
     registration_candidates: int = 6
+    # Two candidates whose reading qualities are within this fraction of each other
+    # are treated as reading equally well, and separated on cell pitch instead. One
+    # percent, because that is comfortably below the difference a real misregistration
+    # makes - a board a whole cell out loses about 3% - and comfortably above the
+    # tenth of a percent that let a quad two cells out win on a confirmed board.
+    reading_tie_frac: float = 0.01
+
     # Candidates below this fraction of the best periodicity are not ranked
     # against it on alignment, however well they happen to align.
     grid_score_relative: float = 0.25
@@ -127,6 +141,40 @@ class Settings(BaseSettings):
     # not shifts - most likely genuinely poor quads that happen to read well. Worth
     # revisiting only with a way to tell a good keystone from a bad one.
     quad_shapes_per_contour: int = 1
+
+    # Line proposals: quads built by intersecting the board's four boundary lines
+    # instead of tracing a region's outline. A segment must be this long, relative
+    # to the frame's longest edge, to be considered a board edge at all - long
+    # enough to exclude tile and cell edges, which is what makes the two families
+    # findable, and short enough to survive an edge broken by a hand or a rack.
+    line_min_length_frac: float = 0.22
+    # How wide a break in an edge to step over, again relative to the longest edge.
+    # This one matters more than it looks. The far edge of a tilted board is the
+    # hardest of the four - foreshortened, lowest contrast, and interrupted by tiles
+    # and racks sitting against it - and at 2% it was missed entirely on a board at
+    # 28 degrees, leaving three sides and no quad. At 5% it is found.
+    line_max_gap_frac: float = 0.05
+    # Hough votes a line needs. Low, because the gate that matters is length, and
+    # requiring both is how the far edge gets lost.
+    line_votes: int = 40
+    # How far from the dominant orientation a segment may lie and still belong to
+    # its family, in degrees. Wide on purpose, and it has to be: a keystone means
+    # opposite edges are genuinely not parallel, and on a board photographed at 28
+    # degrees the two side edges sit 22 degrees apart. At 12 degrees they landed in
+    # different families and the board was rejected for having only one side.
+    # Anything above 45 would be ambiguous between the two families, so this is
+    # nearly as loose as the idea allows; clutter it lets in is dealt with by
+    # grouping and by ranking on how much of each edge was actually seen.
+    line_angle_tolerance: float = 35.0
+    # Segments within this fraction of the frame's longest edge of each other, along
+    # their shared normal, are treated as fragments of one physical edge. About a
+    # third of a cell, so the two sides of a board's printed border stay separate.
+    line_group_gap_frac: float = 0.012
+    # How many candidate edges to offer per side, outermost first. Four sides means
+    # this to the fourth power combinations, so it is deliberately small.
+    line_groups_per_side: int = 3
+    # Quads offered per photograph, best-supported first.
+    line_quad_limit: int = 3
 
     # Colour-region proposals: the frame is clustered into this many colours, once
     # per value, and the thumbnail size clustering runs at. Several values because
@@ -178,7 +226,10 @@ class Settings(BaseSettings):
     # Adaptive threshold used to isolate ink from its tile. Applied twice, once
     # per polarity, so it finds dark letters on cream tiles and light letters on
     # dark tiles without being told which to expect.
-    thresh_block: int = 25          # must be odd
+    # Window size for that threshold, as a fraction of a cell. Was 25 pixels flat,
+    # which meant the same number described half a letter at one warp size and a
+    # whole one at another; 0.52 reproduces the old 25px at the default warp.
+    thresh_block_frac: float = 0.52
     thresh_c: int = 10
 
     # A glyph contour's bounding box, as a fraction of one cell's side.

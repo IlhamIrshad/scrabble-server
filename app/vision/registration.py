@@ -553,6 +553,159 @@ def _intersect(
     return (a + t[0] * (b - a)).astype(np.float32)
 
 
+def _line_quads(bgr: np.ndarray, limit: int) -> list[np.ndarray]:
+    """Quads built from the board's four boundary lines rather than its outline.
+
+    Every other proposal here derives a quad from the *outline of a region* - a
+    colour blob, a texture blob, a contour - and then reduces that outline to four
+    corners. That works when the region is the board and fails in a specific way
+    when it is not quite: the corners come out wherever the blob happens to end.
+
+    A board is bounded by four long straight lines, and those can be found directly.
+    Because they are treated as infinite lines and intersected, the corners come out
+    right even where the corner itself is rounded, occluded, or outside the frame -
+    and the result can express a keystone, which a bounding rectangle cannot.
+
+    Segments are sorted into two families about the dominant orientation and then
+    grouped by position within a family, so that the several fragments of one
+    physical edge become one line. The outermost few groups on each of the four
+    sides are offered, because the outermost line is very often a table edge or a
+    door frame rather than the board.
+    """
+    gray = cv2.bilateralFilter(cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY), 7, 60, 60)
+    med = float(np.median(gray))
+    edges = cv2.Canny(gray, int(max(0, 0.66 * med)), int(min(255, 1.33 * med)))
+
+    h, w = bgr.shape[:2]
+    longest = max(h, w)
+    segments = cv2.HoughLinesP(
+        edges, 1, np.pi / 360.0, threshold=settings.line_votes,
+        minLineLength=int(settings.line_min_length_frac * longest),
+        maxLineGap=int(settings.line_max_gap_frac * longest),
+    )
+    if segments is None or len(segments) < 4:
+        return []
+    segments = segments.reshape(-1, 4).astype(np.float64)
+
+    delta = segments[:, 2:] - segments[:, :2]
+    angle = np.degrees(np.arctan2(delta[:, 1], delta[:, 0])) % 180.0
+    length = np.hypot(delta[:, 0], delta[:, 1])
+
+    # The board's two families of edges are ninety degrees apart, so the dominant
+    # orientation is found modulo ninety - weighted by length, because a long line
+    # is far more likely to be a board edge than a short one.
+    votes = np.zeros(90, dtype=np.float64)
+    np.add.at(votes, (angle % 90.0).astype(np.int32) % 90, length)
+    votes = cv2.GaussianBlur(votes.reshape(-1, 1), (0, 0), 2.0).ravel()
+    dominant = float(np.argmax(votes))
+
+    def apart(from_angle: float) -> np.ndarray:
+        return np.abs((angle - from_angle + 90.0) % 180.0 - 90.0)
+
+    sides: list[list[list[tuple[float, tuple[np.ndarray, np.ndarray]]]]] = []
+    for turn in (0.0, 90.0):
+        member = np.nonzero(apart(dominant + turn) <= settings.line_angle_tolerance)[0]
+        if len(member) < 2:
+            return []
+        # Ordering the family needs a direction to measure along, and with a wide
+        # tolerance the nominal one can be well off. The family's own mean - taken as
+        # a doubled angle so that 179 degrees and 1 degree average to zero rather
+        # than ninety, and weighted by length - is a much better axis to sort on.
+        doubled = np.radians(2.0 * angle[member])
+        mean = np.arctan2((np.sin(doubled) * length[member]).sum(),
+                          (np.cos(doubled) * length[member]).sum()) / 2.0
+        normal = np.array([-np.sin(mean), np.cos(mean)])
+        offsets = segments[member, :2] @ normal
+        order = np.argsort(offsets)
+
+        # One physical edge arrives as several fragments at nearly the same offset,
+        # and a board edge with tiles against it fragments especially badly. Grouping
+        # by offset turns those back into one line, and lets the group's total length
+        # say how much of an edge was actually seen.
+        groups: list[list[int]] = []
+        gap = settings.line_group_gap_frac * longest
+        for pos in order:
+            if groups and offsets[pos] - offsets[groups[-1][-1]] <= gap:
+                groups[-1].append(pos)
+            else:
+                groups.append([pos])
+
+        lines = []
+        for group in groups:
+            rows = member[group]
+            support = float(length[rows].sum())
+            if support < settings.line_min_length_frac * longest:
+                continue
+            lines.append((support, _fit_line(segments[rows])))
+        if len(lines) < 2:
+            return []
+        # Outermost first on each side, since the board's own edge is at worst a
+        # little way in from the frame's outermost line.
+        sides.append([lines[: settings.line_groups_per_side],
+                      lines[::-1][: settings.line_groups_per_side]])
+
+    scored: list[tuple[float, np.ndarray]] = []
+    for a_support, a in sides[0][0]:
+        for b_support, b in sides[0][1]:
+            for c_support, c in sides[1][0]:
+                for d_support, d in sides[1][1]:
+                    corners = []
+                    for first, second in ((a, c), (a, d), (b, d), (b, c)):
+                        point = _intersect(first, second)
+                        if point is None:
+                            break
+                        corners.append(point)
+                    if len(corners) != 4:
+                        continue
+                    quad = order_corners(np.array(corners, np.float32))
+                    if not _plausible_quad(quad, (h, w)):
+                        continue
+                    scored.append(
+                        (a_support + b_support + c_support + d_support, quad))
+
+    # Best supported first: four sides each seen along most of their length is far
+    # more likely to be the board than four scraps that happen to enclose it.
+    scored.sort(key=lambda t: -t[0])
+    quads: list[np.ndarray] = []
+    for _, quad in scored:
+        if any(np.abs(quad - kept).max() < 3.0 for kept in quads):
+            continue
+        quads.append(quad)
+        if len(quads) >= limit:
+            break
+    return quads
+
+
+def _fit_line(segs: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """One line through every endpoint of a group of collinear segments.
+
+    Total least squares, because the fragments of a board edge are spread along it
+    rather than across it, and a fit that minimises vertical error alone would go
+    badly wrong on the edges that run steeply down the frame.
+    """
+    points = np.vstack([segs[:, :2], segs[:, 2:]])
+    centre = points.mean(axis=0)
+    _, _, vt = np.linalg.svd(points - centre, full_matrices=False)
+    direction = vt[0]
+    return centre.astype(np.float64), (centre + 1000.0 * direction).astype(np.float64)
+
+
+def _plausible_quad(quad: np.ndarray, shape: tuple[int, int]) -> bool:
+    """The same size and shape gate `_quads` applies, for quads with no contour.
+
+    Intersecting lines can put a corner anywhere - two nearly parallel edges cross
+    far off screen - so a line-built quad needs the sanity check that a contour
+    gives its own candidates for free.
+    """
+    h, w = shape
+    frame_area = float(h * w)
+    if _aspect_skew(quad) > settings.max_board_aspect_skew or _fills_frame(quad, shape):
+        return False
+    area = cv2.contourArea(quad.astype(np.float32))
+    return (settings.min_board_area_frac * frame_area
+            <= area <= settings.max_board_area_frac * frame_area)
+
+
 def _candidates(bgr: np.ndarray) -> list[tuple[str, np.ndarray]]:
     """Every quad worth scoring, tagged with the detector that proposed it."""
     shape = bgr.shape[:2]
@@ -566,6 +719,8 @@ def _candidates(bgr: np.ndarray) -> list[tuple[str, np.ndarray]]:
             out.append((tag, quad))
     for quad in _quads(_edge_mask(bgr), shape, limit=3):
         out.append(("edges", quad))
+    for quad in _line_quads(bgr, limit=settings.line_quad_limit):
+        out.append(("lines", quad))
 
     # Two detectors often agree to within a pixel or two. Scoring duplicates is
     # harmless but wasteful, and it clutters the diagnostic list.

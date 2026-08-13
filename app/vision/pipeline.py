@@ -81,6 +81,28 @@ def _reading_quality(cells: list[grid.Cell], bank) -> float:
     return found
 
 
+def _wins(quality: float, off_pitch: float, best: float, best_off: float) -> bool:
+    """Whether a candidate beats the best so far, on reading quality then pitch.
+
+    Reading quality decides it, except when the two are close enough that the
+    difference is noise. Measured on a photograph a person had confirmed: the right
+    quad read 173.5 and a quad two cells out read 173.7 - a tenth of a percent apart,
+    and the wrong one won. Everything else about them differed clearly, so a
+    tiebreak was all that was missing.
+
+    The tiebreak is how far the fitted cell pitch is from the one the quad implies,
+    because that answers a question reading quality structurally cannot: a lattice
+    is periodic, so a quad cropped a little way into the playable area still puts
+    whole glyphs in cells, just the wrong cells. The loser above was 7% in; the
+    winner was within a tenth of a percent.
+    """
+    if quality > best * (1.0 + settings.reading_tie_frac):
+        return True
+    if quality < best * (1.0 - settings.reading_tie_frac):
+        return False
+    return off_pitch < best_off
+
+
 def _best_reading(
     image: np.ndarray, options: list[registration.Registration], bank,
 ) -> tuple[registration.Registration, np.ndarray, dict, list[grid.Cell], np.ndarray]:
@@ -117,10 +139,15 @@ def _best_reading(
         shifted = (visible >= settings.premium_min_visible
                    and agreement < settings.premium_reject_below)
         combined = quality * (settings.premium_floor if shifted else 1.0)
-        if best is None or combined > best[0]:
-            best = (combined, quality, agreement, visible, reg, board, info, cells, mask)
+        # How far the fitted cell pitch is from the pitch this quad implies. Only
+        # consulted to separate candidates that read equally well, where it says
+        # which one actually bounds the playable area rather than cutting into it.
+        off_pitch = abs(info.get("period_frac", 1.0) - 1.0)
+        if best is None or _wins(combined, off_pitch, best[0], best[1]):
+            best = (combined, off_pitch, quality, agreement, visible,
+                    reg, board, info, cells, mask)
 
-    combined, quality, agreement, visible, reg, board, info, cells, mask = best
+    _, _, quality, agreement, visible, reg, board, info, cells, mask = best
     info = {**info, "reading_quality": round(quality, 1),
             "premium_match": round(agreement, 2), "premium_visible": visible,
             "candidates_read": len(options)}

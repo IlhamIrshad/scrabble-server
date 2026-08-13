@@ -232,6 +232,28 @@ def test_grid_locks_onto_the_printed_grid(tilt, seed):
     assert grid_alignment(board) > 3.0, (info, grid_alignment(board))
 
 
+@pytest.mark.parametrize("tilt,seed", [(0, 1), (15, 2), (28, 3)])
+def test_boundary_lines_alone_find_the_board(tilt, seed):
+    """The line detector must find the board without help from any region mask.
+
+    It exists for the photographs where no colour or texture blob outlines the board
+    correctly, so it is worth knowing it stands on its own. Judged against the true
+    playable corners the generator returns, not against another detector.
+
+    Tolerant on distance - a whole cell - because these quads bound the printed
+    border rather than the playable area, and closing that gap is the snapping and
+    grid-lock stages' job, not this one's. What is being tested is that the four
+    lines found are the board's, not a table's.
+    """
+    photo, _, truth = make_board_with_corners(tilt, seed)
+    quads = registration._line_quads(photo, settings.line_quad_limit)
+    assert quads, f"no quad from boundary lines at tilt={tilt} seed={seed}"
+
+    step = np.linalg.norm(truth[1] - truth[0]) / 15.0
+    best = min(np.abs(registration.order_corners(q) - truth).max() for q in quads)
+    assert best <= step, f"nearest line quad is {best / step:.2f} cells out"
+
+
 def test_registration_fails_loudly_on_a_blank_image():
     with pytest.raises(registration.RegistrationError):
         pipeline.detect(np.full((600, 600, 3), 128, np.uint8))

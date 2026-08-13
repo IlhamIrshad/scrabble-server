@@ -177,7 +177,12 @@ def binarize(board: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     """
     lightness = cv2.cvtColor(board, cv2.COLOR_BGR2LAB)[:, :, 0]
     lightness = cv2.GaussianBlur(lightness, (3, 3), 0)
-    block = settings.thresh_block | 1        # force odd
+    # Sized as a fraction of a cell, not in pixels. Adaptive thresholding compares
+    # a pixel against a window around it, so the window has to mean the same thing
+    # relative to a letter whatever resolution the board was warped to - otherwise
+    # raising `warp_size` silently halves it and changes what counts as ink.
+    step = board.shape[0] / N
+    block = max(3, int(round(settings.thresh_block_frac * step)) | 1)
     dark = cv2.adaptiveThreshold(
         lightness, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV,
         block, settings.thresh_c,
