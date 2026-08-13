@@ -266,6 +266,12 @@ def detect(
             # confident read.
             read = classify.read_value(value_bank, cell.value_glyph)
             bonus = classify.value_bonus(bank.letters, read.letter, read.best_iou)
+
+            # Whether the letter's outline closes, which overlap alone cannot see.
+            enclosed = grid.counters(cell.glyph)
+            topology = bank.counter_bonus(enclosed)
+            bonus = topology if bonus is None else bonus + topology
+
             m = bank.match(cell.glyph, bonus)
 
             notes = list(cell.notes)

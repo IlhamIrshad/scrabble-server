@@ -421,6 +421,39 @@ class Settings(BaseSettings):
     # comes down to the tilt of the photograph. Measured over the synthetic set,
     # 48 halves the error rate and 64 is not better again.
     glyph_size: int = 48
+
+    # How specks of ink are removed from a thresholded cell: "area" drops whole
+    # components below `glyph_speck_frac` of a cell, "open" uses a 3x3 morphological
+    # opening, "none" does nothing. See `grid._despeckle` for why an opening is the
+    # wrong tool - it deletes anything narrow, and the thinnest part of a stroke is
+    # narrow, so it breaks the very shapes that distinguish O, Q, C and G.
+    glyph_despeckle: str = "area"
+    # Smallest surviving speck, as a fraction of a cell's area. At 72 pixels a cell
+    # this is about 21 pixels, well under any part of a letter and well over the
+    # single-pixel noise that thresholding leaves behind.
+    glyph_speck_frac: float = 0.004
+    # Rounds of 3x3 closing used to repair pinhole breaks in a stroke *before
+    # counting its enclosed holes*, never on the glyph that gets matched. Each round
+    # bridges about a pixel, so this cannot reach the ten-pixel opening of a "C"
+    # while still mending the one- and two-pixel breaks that leave an "O" open: it
+    # takes closed "O" rings from 8% to 94%. See `grid.counters`.
+    glyph_bridge_rounds: int = 1
+    # Smallest enclosed region that counts as a counter, as a fraction of the glyph
+    # canvas. Guards against a single stray background pixel reading as a hole.
+    counter_min_area_frac: float = 0.0026
+    # Added to a letter's overlap score when its reference glyphs enclose the same
+    # number of holes as the glyph being read. Additive, like the point-value bonus,
+    # so topology can settle a near-tie between "O" and "C" without being able to
+    # talk a shapeless blob into being a letter.
+    #
+    # Deliberately small, and it has to be. Swept over 49 photographs of one board
+    # against both word accuracy and how far the letters read depart from what a tile
+    # set contains: 0.05 gives 93.2% and a departure of 47, where no bonus at all
+    # gives 92.3% and 89. Past 0.1 it inverts sharply - 0.2 gives 82.9%, because most
+    # letters enclose nothing, so a large reward for enclosing nothing lets "G"
+    # collect them wholesale and it climbs from 133 to 213 against an expected 141.
+    # It is worth exactly as much as a tiebreak and no more.
+    counter_bonus: float = 0.05
     glyph_pad: int = 4
     # Folder of pictures of real tiles, one per letter, named A.png ... Z.png. Used
     # in preference to a rendered font when present, because a reference glyph only
@@ -463,7 +496,23 @@ class Settings(BaseSettings):
     conf_temperature: float = 0.05
     # Cells below this confidence are listed in `low_confidence` for the
     # operator UI to resolve.
-    low_conf_threshold: float = 0.60
+    # Below this, a read is flagged for review. Raised from 0.60 after cleaning up the
+    # ink extraction: cleaner glyphs read more accurately, but they also match a wrong
+    # template *well*, and three misreads that used to be too damaged to be believed
+    # started arriving just above the old bar, at 0.62 to 0.70. Every misread the
+    # synthetic boards produce now sits under 0.75.
+    #
+    # The cost is measured and real: 16% of tiles flagged where 0.60 flagged 7.5%.
+    # Worth it in this direction only - a doubtful letter costs one tap in the operator
+    # UI, and a confident wrong one corrupts a game record nobody looks at twice.
+    #
+    # A more selective rule was tried and withdrawn. Capping confidence whenever the
+    # top two letters' *templates* overlap heavily is the more principled statement -
+    # overlap cannot separate shapes that are nearly nested - but it flagged 71% of
+    # tiles to catch the same three, because most letters' runner-up is some similar
+    # letter. Containment did not help either: glyphs are normalised to fill the
+    # canvas, so a 'Q' has a smaller ring than an 'O' and is not nested in it at all.
+    low_conf_threshold: float = 0.75
 
 
 settings = Settings()

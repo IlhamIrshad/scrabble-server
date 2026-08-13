@@ -396,6 +396,79 @@ def _assign_to_cells(cands: list[dict], step: float) -> dict[tuple[int, int], di
     return {k: v[1] for k, v in best.items()}
 
 
+def _despeckle(mask: np.ndarray, step: float) -> np.ndarray:
+    """Drop specks of ink without thinning what is left.
+
+    A morphological opening is the obvious way to do this and it costs more than it
+    removes. Opening erodes and then dilates, so anything narrower than the kernel
+    is deleted rather than restored - and at this resolution a stroke is only two or
+    three pixels wide where it thins. What it deletes is the thinnest part of a
+    stroke, which breaks the ring of an 'O' and takes the tail off a 'Q'; measured
+    over 49 photographs of one board, an 'O' arrived with its counter still enclosed
+    just 4% of the time. Once the ring is open, 'O', 'Q', 'C' and 'G' are the same
+    blob to a shape matcher, and they collapse onto 'O' - which is exactly the error
+    that dominates: 'O' over-read by 48 against the tile set while 'Q' and 'C' were
+    short by 36 and 31.
+
+    Removing whole components below an area instead leaves every stroke exactly as
+    thresholded, however thin, and still discards the specks the opening was there
+    for - which are small in area, not merely narrow.
+    """
+    if settings.glyph_despeckle == "open":
+        return cv2.morphologyEx(mask, cv2.MORPH_OPEN, np.ones((3, 3), np.uint8))
+    if settings.glyph_despeckle == "none":
+        return mask
+
+    n, labels, stats, _ = cv2.connectedComponentsWithStats(
+        (mask > 0).astype(np.uint8), connectivity=8
+    )
+    floor = max(2.0, settings.glyph_speck_frac * step * step)
+    keep = np.zeros_like(mask)
+    for i in range(1, n):
+        if stats[i, cv2.CC_STAT_AREA] >= floor:
+            keep[labels == i] = 255
+    return keep
+
+
+def counters(glyph: np.ndarray) -> int:
+    """How many enclosed holes a glyph has: 'O' and 'D' one, 'B' two, 'C' none.
+
+    Topology, which is the one thing that separates the letters overlap is worst at.
+    'O', 'Q', 'C' and 'G' differ over a small part of their outline and score almost
+    identically against each other, and measured on one board 'O' was over-read by
+    48 while 'Q' and 'C' were short by 36 and 31. Whether the outline closes is a
+    different kind of evidence entirely, and it is not a matter of degree.
+
+    Counted on a *bridged copy* rather than on the glyph itself. The threshold is
+    deliberately placed to keep strokes thin, since a fattened stroke closes the gap
+    in a 'C' and swallows the tail of a 'Q'; the price is that strokes break, and
+    without repair an 'O' arrives with its counter enclosed only 8% of the time,
+    which makes the count useless. One round of closing takes that to 94%.
+
+    The repair is confined to here because it is not free: applied to the glyph that
+    gets matched it also fattens every stroke, and measured over 49 photographs that
+    cost 0.9 points of word accuracy. A break where a stroke thins is a pixel or two
+    across and a 'C' is open by a good ten, so a small closing mends the one and
+    cannot reach the other.
+    """
+    if glyph is None or not glyph.any():
+        return 0
+    solid = (glyph > 0).astype(np.uint8)
+    if settings.glyph_bridge_rounds > 0:
+        solid = cv2.morphologyEx(solid, cv2.MORPH_CLOSE, np.ones((3, 3), np.uint8),
+                                 iterations=settings.glyph_bridge_rounds)
+    padded = cv2.copyMakeBorder(solid, 1, 1, 1, 1, cv2.BORDER_CONSTANT, value=0)
+    # Four-connectivity on the background, which is the correct dual of eight on the
+    # ink: with eight, a hole leaks out through any diagonal step in a jagged edge.
+    count, labels = cv2.connectedComponentsWithAlgorithm(
+        1 - padded, 4, cv2.CV_32S, cv2.CCL_DEFAULT
+    )[:2]
+    outside = labels[0, 0]
+    floor = settings.counter_min_area_frac * glyph.shape[0] * glyph.shape[1]
+    return sum(1 for i in range(1, count)
+               if i != outside and (labels == i).sum() >= floor)
+
+
 def _cell_glyph(
     lightness: np.ndarray, cell: Cell, size: int, step: float, ink: np.ndarray
 ) -> dict | None:
@@ -467,7 +540,7 @@ def _cell_glyph(
             cv2.THRESH_BINARY | cv2.THRESH_OTSU,
         )
         hit = sign * (patch - level / 2.55) > 0.0
-        mask = cv2.morphologyEx(hit.astype(np.uint8) * 255, cv2.MORPH_OPEN, kernel)
+        mask = _despeckle(hit.astype(np.uint8) * 255, step)
         local_centre = (centre[0] - px0, centre[1] - py0)
         for cand in _glyph_candidates(mask, step, polarity, local_centre):
             cx, cy = px0 + cand["cx"], py0 + cand["cy"]
