@@ -61,6 +61,17 @@ class RegistrationInfo(BaseModel):
             "than the printed grid, so every cell is likely half a cell out."
         ),
     )
+    confident: bool = Field(
+        True,
+        description=(
+            "Whether the board's geometry looks sound. Calibrated against 160 "
+            "photographs judged by eye: when this is false the board really was "
+            "misregistered in all but one case in sixty, so treat it as a reason "
+            "to re-take the photograph. When true it means only that nothing "
+            "looks wrong - about a quarter of boards marked confident are still "
+            "misregistered - so it is not a guarantee that the board is correct."
+        ),
+    )
     considered: list[tuple[str, float]] = Field(
         default_factory=list,
         description=(

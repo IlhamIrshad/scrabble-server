@@ -32,6 +32,33 @@ from ..config import settings
 
 N = 15
 
+# The standard premium-square layout, given as one eighth of the board and
+# unfolded by symmetry. This is the only thing on a board that is *not* periodic,
+# which makes it the only thing that can pin the board's absolute position: a
+# lattice shifted by a whole cell still lands on every printed grid line and still
+# centres every glyph, so nothing else in this pipeline can tell it from the truth.
+# Shift this pattern by one cell and it stops matching at all.
+_TRIPLE_WORD = [(0, 0), (0, 7), (7, 0)]
+_DOUBLE_WORD = [(1, 1), (2, 2), (3, 3), (4, 4)]
+_TRIPLE_LETTER = [(1, 5), (5, 1), (5, 5)]
+_DOUBLE_LETTER = [(0, 3), (3, 0), (2, 6), (6, 2), (6, 6), (7, 3), (3, 7)]
+
+
+def _premium_squares() -> frozenset[tuple[int, int]]:
+    out: set[tuple[int, int]] = set()
+    for coords in (_TRIPLE_WORD, _DOUBLE_WORD, _TRIPLE_LETTER, _DOUBLE_LETTER):
+        for r, c in coords:
+            for rr, cc in ((r, c), (r, N - 1 - c), (N - 1 - r, c), (N - 1 - r, N - 1 - c)):
+                out.add((rr, cc))
+                out.add((cc, rr))
+                out.add((N - 1 - cc, rr))
+                out.add((cc, N - 1 - rr))
+    out.add((7, 7))                     # the centre star is a double word
+    return frozenset(out)
+
+
+PREMIUM = _premium_squares()
+
 
 @dataclass
 class Cell:
@@ -573,6 +600,41 @@ def _is_tile(
     if to_tile > settings.tile_face_delta_e:
         return False
     return board_face is None or to_tile < delta_e(face, board_face)
+
+
+def premium_agreement(cells: list[Cell]) -> tuple[float, int]:
+    """How well the board's visible premium squares match the standard layout.
+
+    Returns (fraction landing on a premium square, how many were visible).
+
+    This is the only shift-sensitive measure available. Everything else the
+    pipeline knows about a board is periodic - printed grid lines repeat, cells
+    repeat, glyphs sit centred in cells whichever cell they are assigned to - so a
+    lattice one whole cell out scores identically to the right one, and the error
+    that relabels the entire board is invisible. The premium layout does not
+    repeat, so a shifted reading scatters its coloured squares onto plain ones.
+
+    Chance is about 0.27, since 61 of 225 squares are premium. A correctly placed
+    board scores far above that; one shifted by a cell falls to around chance.
+
+    Only *empty* cells can vote: a premium square under a tile is not visible, and
+    late in a game most of them are covered. That is why the count is returned too
+    - on a nearly full board there may be too few left to judge by.
+    """
+    board_face = _dominant_colour(
+        [c.face for c in cells if not c.occupied and c.face is not None],
+        settings.tile_face_delta_e,
+    )
+    if board_face is None:
+        return 0.0, 0
+    detected = {
+        (c.row, c.col) for c in cells
+        if not c.occupied and c.face is not None
+        and delta_e(c.face, board_face) > settings.premium_delta_e
+    }
+    if len(detected) < settings.premium_min_visible:
+        return 0.0, len(detected)
+    return len(detected & PREMIUM) / len(detected), len(detected)
 
 
 def _detect_blanks(
