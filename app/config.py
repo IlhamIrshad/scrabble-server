@@ -96,10 +96,18 @@ class Settings(BaseSettings):
     registration_candidates: int = 6
     # Probe for a whole-cell shift when the chosen board agrees with the printed
     # premium layout less well than this. Set between the two populations it has to
-    # separate, measured over 161 photographs a person judged: boards registered
-    # correctly agree at 0.62 to 0.97, and the two that were a cell out sat at 0.06
-    # and 0.16. Nothing correct comes near this bar, so the probe is free on them.
-    shift_probe_below: float = 0.50
+    # separate, measured over 161 photographs a person judged: the two boards that
+    # were a cell out sat at 0.06 and 0.16, and the lowest *correctly* registered
+    # board scores 0.34.
+    #
+    # That floor of 0.34 is not about position at all. Agreement is matched partly on
+    # colour, so a board whose premium squares are not the usual red and blue - and
+    # the corpus has a red and yellow one, a grey and purple one, a white one with
+    # black tiles - scores low however perfectly it is registered. Six of the 89
+    # confirmed boards sit between 0.34 and 0.53 for that reason alone. At 0.50 this
+    # probed two of them; it is set below anything a correct board has scored, which
+    # still leaves a doubling of margin over the shifts it is meant to catch.
+    shift_probe_below: float = 0.30
     # A shifted board is only adopted if it agrees at least this well and improves on
     # the original by at least this much. Both, because agreeing merely less badly
     # means the board has been nudged rather than found, and the original at least

@@ -1173,8 +1173,8 @@ def shortlist(
     )
 
 
-def warp_board(bgr: np.ndarray, corners: np.ndarray) -> tuple[np.ndarray, dict]:
-    """Rectify the board so the 15x15 playable grid exactly fills the output.
+def board_transform(bgr: np.ndarray, corners: np.ndarray) -> tuple[np.ndarray, dict]:
+    """The homography that maps this photograph onto a rectified 15x15 board.
 
     Two passes. The first warps the detected quad plus a margin of surrounding
     context. The second locks onto the printed grid lines found in that image,
@@ -1189,8 +1189,7 @@ def warp_board(bgr: np.ndarray, corners: np.ndarray) -> tuple[np.ndarray, dict]:
     # Refuse an implausible lock. Being a little misaligned costs a few
     # low-confidence cells; being a whole row out corrupts the entire board.
     if not fit.plausible:
-        plain = _apply(bgr, _homography(corners, size, settings.grid_inset_frac), size)
-        return plain, {
+        return _homography(corners, size, settings.grid_inset_frac), {
             "locked": False,
             "reason": "grid fit rejected as implausible; using the quad as given",
             "period_frac": round(fit.period_frac, 4),
@@ -1199,9 +1198,8 @@ def warp_board(bgr: np.ndarray, corners: np.ndarray) -> tuple[np.ndarray, dict]:
 
     s = size / (15.0 * fit.period)
     a = np.array([[s, 0.0, -fit.phase_x * s], [0.0, s, -fit.phase_y * s], [0.0, 0.0, 1.0]])
-    fine = _apply(bgr, a @ m, size)
 
-    return fine, {
+    return a @ m, {
         "locked": True,
         # The playable area as a fraction of the detected quad. Around 0.9 means
         # the quad was the board's outer edge; above 1.0 means it cropped in.
@@ -1213,3 +1211,30 @@ def warp_board(bgr: np.ndarray, corners: np.ndarray) -> tuple[np.ndarray, dict]:
         "grid_score": round(fit.score, 3),
         "grid_alignment": round(fit.alignment, 3),
     }
+
+
+def warp_board(bgr: np.ndarray, corners: np.ndarray) -> tuple[np.ndarray, dict]:
+    """Rectify the board so the 15x15 playable grid exactly fills the output."""
+    m, info = board_transform(bgr, corners)
+    return _apply(bgr, m, settings.warp_size), info
+
+
+def cell_centres(bgr: np.ndarray, corners: np.ndarray) -> np.ndarray:
+    """Where the 225 cell centres of this registration land in the photograph.
+
+    The measurement to compare two registrations by. Corner positions are the
+    obvious thing and the wrong thing: the grid lock re-fits the cell pitch and
+    phase, so it both absorbs and amplifies differences between the quads it is
+    given. Measured over the boards where two confirmed answers disagree, one pair
+    1.67 cells apart at the corners ends up 0.15 apart cell for cell, and another
+    0.37 apart at the corners ends up 1.66 apart - in opposite directions. What
+    determines the transcript is where the cells finally sit, so that is what this
+    reports.
+    """
+    m, _ = board_transform(bgr, corners)
+    size = settings.warp_size
+    step = size / 15.0
+    pts = np.array([[(c + 0.5) * step, (r + 0.5) * step]
+                    for r in range(15) for c in range(15)], np.float32)
+    return cv2.perspectiveTransform(
+        pts.reshape(-1, 1, 2), np.linalg.inv(m)).reshape(-1, 2)
