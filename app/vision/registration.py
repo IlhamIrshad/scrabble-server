@@ -87,6 +87,22 @@ def order_corners(pts: np.ndarray) -> np.ndarray:
     )
 
 
+def shift_quad(corners: np.ndarray, dx: int, dy: int) -> np.ndarray:
+    """The same quad slid `dx` cells across and `dy` cells down the board.
+
+    Each corner moves along the edges it belongs to, so a keystone slides along its
+    own perspective rather than being translated bodily - the top corners follow the
+    top edge and the bottom corners the bottom edge, which for a shift of a cell or
+    two is indistinguishable from re-projecting through the homography.
+    """
+    tl, tr, br, bl = order_corners(corners)
+    top, bottom = (tr - tl) / 15.0, (br - bl) / 15.0
+    left, right = (bl - tl) / 15.0, (br - tr) / 15.0
+    return np.array([tl + dx * top + dy * left, tr + dx * top + dy * right,
+                     br + dx * bottom + dy * right, bl + dx * bottom + dy * left],
+                    dtype=np.float32)
+
+
 def _aspect_skew(corners: np.ndarray) -> float:
     """Ratio of the longer mean side to the shorter. 1.0 is a perfect square."""
     tl, tr, br, bl = corners

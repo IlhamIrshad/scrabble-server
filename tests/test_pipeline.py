@@ -254,6 +254,34 @@ def test_boundary_lines_alone_find_the_board(tilt, seed):
     assert best <= step, f"nearest line quad is {best / step:.2f} cells out"
 
 
+@pytest.mark.parametrize("dx,dy", [(1, 0), (-1, 0), (0, 1), (0, -1)])
+def test_a_board_a_whole_cell_out_is_put_back(dx, dy):
+    """Handed a board shifted by one cell, the pipeline must find the right one.
+
+    The failure being guarded against is the only one that hides. A shifted lattice
+    fits as well as the true one, reads a full complement of tiles and clears every
+    geometric check, so what comes back is a complete and confident transcript of
+    the wrong cells. The printed premium squares are the one board feature that does
+    not repeat, and so the only thing that can tell the difference.
+
+    Started from the true corners rather than the detector's, so that the shift is
+    exactly one cell and the test is about recovering from it rather than about
+    which quad some detector happened to propose.
+
+    What is asserted is the transcript, not the direction taken to reach it. Without
+    the correction these inputs agree with the printed layout at 0.08 and misread
+    the whole board, so the property is real; but warping re-fits the cell comb, and
+    a quad perturbed by about a cell can be pulled back from more than one
+    direction, so which probe is adopted is not meaningful.
+    """
+    photo, truth, corners = make_board_with_corners(8, 1)
+    result = pipeline.detect(photo, registration.shift_quad(corners, dx, dy))
+
+    assert not misread_letters(truth, result), (
+        f"shifted by ({dx},{dy}) and read {result.registration.method}"
+    )
+
+
 def test_registration_fails_loudly_on_a_blank_image():
     with pytest.raises(registration.RegistrationError):
         pipeline.detect(np.full((600, 600, 3), 128, np.uint8))

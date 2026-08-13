@@ -94,6 +94,19 @@ class Settings(BaseSettings):
     # about 1.8s each, 6 give 111 at about 2.7s. Turn it down for the WebSocket
     # path, where frames are cheap and latency is not.
     registration_candidates: int = 6
+    # Probe for a whole-cell shift when the chosen board agrees with the printed
+    # premium layout less well than this. Set between the two populations it has to
+    # separate, measured over 161 photographs a person judged: boards registered
+    # correctly agree at 0.62 to 0.97, and the two that were a cell out sat at 0.06
+    # and 0.16. Nothing correct comes near this bar, so the probe is free on them.
+    shift_probe_below: float = 0.50
+    # A shifted board is only adopted if it agrees at least this well and improves on
+    # the original by at least this much. Both, because agreeing merely less badly
+    # means the board has been nudged rather than found, and the original at least
+    # came from a detector. The two recovered boards go to 0.94 and 0.78.
+    shift_adopt_above: float = 0.50
+    shift_adopt_margin: float = 0.25
+
     # Two candidates whose reading qualities are within this fraction of each other
     # are treated as reading equally well, and separated on cell pitch instead. One
     # percent, because that is comfortably below the difference a real misregistration
