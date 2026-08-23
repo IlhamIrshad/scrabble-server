@@ -330,3 +330,19 @@ dialog menu { display: flex; gap: 8px; justify-content: flex-end; padding: 0; ma
 #scan-result.bad { color: var(--fail); }
 #api-state.up { color: var(--pass); }
 #api-state.down { color: var(--fail); }
+
+/* When a past turn is being viewed, typing does nothing. That has to be obvious:
+   a control that silently ignores you reads as broken, which is exactly how it was
+   reported. */
+#lock-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 5px;
+  background: var(--dw);
+  color: var(--tile-ink);
+  font-weight: 600;
+}
+#lock-note[hidden] { display: none; }
+body.locked .board { outline: 3px solid var(--warn); outline-offset: 3px; }

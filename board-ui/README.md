@@ -10,7 +10,7 @@ Two servers: the page itself, and the board reader it scans with.
 
 ```
 cd board-ui
-python -m http.server 8200        # the page
+python serve.py                   # the page, on 8200
 ```
 
 ```
@@ -23,6 +23,11 @@ type boards in instead of scanning them.
 **It will not work if you open `index.html` directly.** The code is split into ES
 modules, and browsers refuse to load those over `file://`. If the page comes up blank,
 that is almost always why.
+
+`serve.py` is `python -m http.server` with caching switched off. Any static server will
+do in principle, but the plain one lets the browser decide how long a file stays fresh,
+and it decides generously - an edited module keeps being served from cache and the page
+goes on running the old version, which looks exactly like a change that did not work.
 
 Press **load sample** to get a board to play with.
 

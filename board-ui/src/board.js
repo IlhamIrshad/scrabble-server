@@ -116,13 +116,39 @@ function draw(el, cell, premium, isNew, isSelected, direction) {
       warn.className = 'flag-mark';
       warn.textContent = '!';
       el.appendChild(warn);
-      el.title = 'read with confidence ' + cell.confidence.toFixed(2);
     }
+    el.title = describe(cell);
   }
 
   if (isSelected) {
     el.classList.add('is-selected', direction === 'vertical' ? 'dir-v' : 'dir-h');
   }
+}
+
+/**
+ * What the reader made of this square, in words, for the hover.
+ *
+ * Worth spelling out rather than showing a bare number. "0.62" means nothing on its
+ * own; whether that is below the bar this board is being judged by is the thing an
+ * operator actually needs, and so is the difference between a tile the reader named
+ * doubtfully and one it could not name at all.
+ */
+function describe(cell) {
+  const where = String.fromCharCode(65 + cell.col) + (cell.row + 1);
+  const parts = [where];
+
+  if (cell.isBlank) parts.push(cell.letter ? 'blank played as ' + cell.letter : 'blank, letter unknown');
+  else if (cell.letter == null) parts.push('a tile, but no letter could be read');
+  else parts.push('read as ' + cell.letter + ' (' + (TILES[cell.letter] ? TILES[cell.letter][1] : '?') + ' points)');
+
+  if (cell.confidence == null) {
+    parts.push(cell.source === 'manual' ? 'typed in by hand' : 'not from the reader');
+  } else if (cell.confidence < FLAG_BELOW) {
+    parts.push('confidence ' + cell.confidence.toFixed(2) + ' - below ' + FLAG_BELOW + ', worth checking');
+  } else {
+    parts.push('confidence ' + cell.confidence.toFixed(2));
+  }
+  return parts.join(' · ');
 }
 
 export function focusCell(row, col) {

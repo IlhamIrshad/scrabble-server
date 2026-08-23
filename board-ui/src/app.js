@@ -14,12 +14,8 @@ const $ = id => document.getElementById(id);
 
 // -- start up ----------------------------------------------------------------
 
-board.build($('board'), (dr, dc) => {
-  // The board hands back the square that was clicked *on screen*; turn it into the
-  // square that square really is before anything else sees it.
-  const { row, col } = board.toCanonical(dr, dc, state.get().rotation);
-  editor.select(row, col);
-});
+// The board is drawn straight, so the square clicked is the square meant.
+board.build($('board'), (row, col) => editor.select(row, col));
 
 editor.init(render, turns.canEdit);
 
@@ -211,7 +207,12 @@ async function checkReader() {
 checkReader();
 
 async function runScan(intoNewTurn) {
-  if (intoNewTurn) turns.add();
+  // A new document already has one empty turn waiting, so the first scan of a game
+  // fills it rather than pushing it aside. Otherwise every game began with a blank
+  // turn 1 that nothing could ever be put in, and stepping back to it showed an empty
+  // board that looked like a fault.
+  const atStart = state.get().turns.length === 1 && state.currentTurn().cells.length === 0;
+  if (intoNewTurn && !atStart) turns.add();
   if (!turns.canEdit()) {
     say('that turn is locked - press "edit this turn" first', true);
     return;
