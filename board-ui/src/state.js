@@ -173,6 +173,21 @@ export function clearCell(row, col, opts = {}) {
   emit();
 }
 
+/**
+ * Replace everything on the current turn in one go, as a scan does.
+ *
+ * Logged as a single entry so that undo treats a scan as one act. Walking a scan back
+ * ninety cells at a time would be unusable, and worse, it would leave the board in
+ * states that were never on it.
+ */
+export function replaceCells(cells, why = 'scan') {
+  const turn = currentTurn();
+  const before = turn.cells.map(c => ({ ...c }));
+  turn.cells = cells.map(c => ({ ...c }));
+  record({ action: 'replaceCells', why, before: { cells: before }, after: { cells: turn.cells.map(c => ({ ...c })) } });
+  emit();
+}
+
 export function setRotation(rotation) {
   const before = doc.rotation;
   doc.rotation = ((rotation % 360) + 360) % 360;
@@ -269,6 +284,10 @@ function apply(entry, side) {
       doc.currentTurn = clamp(entry.turnIndex, 0, doc.turns.length - 1);
       break;
     }
+    case 'replaceCells':
+      turn.cells = (target.cells || []).map(c => ({ ...c }));
+      doc.currentTurn = clamp(entry.turnIndex, 0, doc.turns.length - 1);
+      break;
     case 'rotate':
       doc.rotation = target.rotation;
       break;

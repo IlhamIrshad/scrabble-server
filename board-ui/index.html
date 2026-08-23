@@ -32,6 +32,19 @@
 
   <aside class="panels">
     <section class="panel">
+      <h2>Scan <span id="api-state" class="muted">checking…</span></h2>
+      <div class="scan-row">
+        <button id="scan-new" class="primary">new turn + scan</button>
+        <button id="scan-here">rescan this turn</button>
+      </div>
+      <p id="scan-result" class="muted">Pick a photograph of the board; the reader fills the turn in.</p>
+      <label class="field">
+        reader address
+        <input id="api-base" type="text" spellcheck="false">
+      </label>
+    </section>
+
+    <section class="panel">
       <h2>Turn <span id="turn-n">1</span> of <span id="turn-total">1</span></h2>
       <p id="turn-who" class="muted"></p>
       <p id="turn-delta" class="muted"></p>

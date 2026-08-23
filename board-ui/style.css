@@ -323,3 +323,10 @@ dialog menu { display: flex; gap: 8px; justify-content: flex-end; padding: 0; ma
   color: var(--muted);
 }
 .drop.over { border-color: var(--accent); color: var(--accent); }
+
+.scan-row { display: flex; gap: 6px; flex-wrap: wrap; }
+.scan-row button { flex: 1 1 auto; }
+#scan-result.busy { color: var(--accent); }
+#scan-result.bad { color: var(--fail); }
+#api-state.up { color: var(--pass); }
+#api-state.down { color: var(--fail); }

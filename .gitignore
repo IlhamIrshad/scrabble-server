@@ -16,3 +16,4 @@ venv/
 /photos/
 /photos_excluded/
 /fixtures/
+board-ui/.testphotos/

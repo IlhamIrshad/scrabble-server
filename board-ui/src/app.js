@@ -8,6 +8,7 @@ import * as io from './io.js';
 import { pool } from './pool.js';
 import { checks } from './validate.js';
 import { ROTATIONS, TILES } from './constants.js';
+import * as scan from './scan.js';
 
 const $ = id => document.getElementById(id);
 
@@ -165,6 +166,79 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Home') { e.preventDefault(); turns.first(); }
   if (e.key === 'End') { e.preventDefault(); turns.last(); }
 });
+
+// -- scanning ----------------------------------------------------------------
+//
+// A frame goes to the reader, the reader answers with a board, and the board fills the
+// turn. Where the frame comes from - a photograph now, a webcam later, a camera on
+// another machine after that - changes only the first of those three.
+
+$('api-base').value = scan.apiBase();
+$('api-base').onchange = e => { scan.setApiBase(e.target.value.trim()); checkReader(); };
+
+async function checkReader() {
+  const el = $('api-state');
+  el.className = 'muted';
+  el.textContent = 'checking…';
+  try {
+    const h = await scan.health();
+    el.className = 'up';
+    el.textContent = 'reader ready · ' + h.templates.letters + ' letters';
+  } catch (err) {
+    el.className = 'down';
+    // Say which address failed. "Failed to fetch" on its own sends people looking in
+    // the wrong place, and the usual cause is simply that the reader is not running.
+    el.textContent = 'no reader at ' + scan.apiBase();
+  }
+}
+checkReader();
+
+async function runScan(intoNewTurn) {
+  if (intoNewTurn) turns.add();
+  if (!turns.canEdit()) {
+    say('that turn is locked - press "edit this turn" first', true);
+    return;
+  }
+  const blob = await scan.fromFile();
+  if (!blob) return;
+
+  say('reading ' + blob.name + '…');
+  setBusy(true);
+  try {
+    const r = await scan.scanIntoCurrentTurn(blob);
+    const parts = [r.tiles + ' tiles'];
+    if (r.blanks) parts.push(r.blanks + ' blank');
+    if (r.unnamed) parts.push(r.unnamed + ' unreadable');
+    parts.push(r.flagged + ' to check');
+    if (r.rotated) parts.push('board turned ' + r.rotated + '° to match the last turn');
+    if (r.registration && r.registration.confident === false) {
+      parts.push('registration doubtful - consider re-taking the photograph');
+    }
+    say(parts.join(' · '), r.registration && r.registration.confident === false);
+  } catch (err) {
+    // A board the reader cannot find is an ordinary outcome, not a crash: bad light, a
+    // hand across the board, a photograph taken too obliquely. Say so and leave the
+    // turn alone so the operator can type it in instead.
+    say('could not read it: ' + err.message, true);
+  } finally {
+    setBusy(false);
+  }
+}
+
+function say(text, bad = false) {
+  const el = $('scan-result');
+  el.textContent = text;
+  el.className = bad ? 'bad' : 'muted';
+}
+
+function setBusy(on) {
+  $('scan-new').disabled = on;
+  $('scan-here').disabled = on;
+  $('scan-result').classList.toggle('busy', on);
+}
+
+$('scan-new').onclick = () => runScan(true);
+$('scan-here').onclick = () => runScan(false);
 
 // -- import ------------------------------------------------------------------
 
