@@ -39,6 +39,14 @@ export function createDocument(sessionId = 'untitled') {
     sessionId,
     boardLayout: 'CrosswordGame',
     tileSet: 'english',
+    // Kept because the interchange format has it, and always zero from here. The
+    // specification described it as a rotation "applied at render", and that turned
+    // out to be the wrong idea: turning the drawing moves the squares while leaving
+    // the letters upright, which makes the board unreadable rather than turned.
+    //
+    // A rotated *photograph* is a real problem and is dealt with where it arises - a
+    // scan is turned to match the tiles already known before its cells are stored, so
+    // what is recorded here is always the board the right way up.
     rotation: 0,
     players: ['Player A', 'Player B'],
     turns: [emptyTurn(0, 0)],
@@ -188,13 +196,6 @@ export function replaceCells(cells, why = 'scan') {
   emit();
 }
 
-export function setRotation(rotation) {
-  const before = doc.rotation;
-  doc.rotation = ((rotation % 360) + 360) % 360;
-  record({ action: 'rotate', before: { rotation: before }, after: { rotation: doc.rotation } });
-  emit();
-}
-
 export function setAnnotation(annotation) {
   const t = currentTurn();
   const before = t.annotation;
@@ -287,9 +288,6 @@ function apply(entry, side) {
     case 'replaceCells':
       turn.cells = (target.cells || []).map(c => ({ ...c }));
       doc.currentTurn = clamp(entry.turnIndex, 0, doc.turns.length - 1);
-      break;
-    case 'rotate':
-      doc.rotation = target.rotation;
       break;
     case 'annotate':
       turn.annotation = target.annotation;

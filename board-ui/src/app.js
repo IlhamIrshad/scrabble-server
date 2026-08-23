@@ -7,7 +7,7 @@ import * as turns from './turns.js';
 import * as io from './io.js';
 import { pool } from './pool.js';
 import { checks } from './validate.js';
-import { ROTATIONS, TILES } from './constants.js';
+import { TILES } from './constants.js';
 import * as scan from './scan.js';
 
 const $ = id => document.getElementById(id);
@@ -62,7 +62,6 @@ function render() {
   $('annotation').value = turn.annotation;
   if ($('note').value !== turn.note) $('note').value = turn.note;
 
-  $('rotation').textContent = doc.rotation + '°';
   $('direction').textContent = editor.view.direction === 'horizontal' ? 'across' : 'down';
   $('blank-mode').setAttribute('aria-pressed', String(editor.view.blankMode));
   $('blank-mode').classList.toggle('on', editor.view.blankMode);
@@ -123,9 +122,18 @@ function renderChecks() {
 
 // -- controls ----------------------------------------------------------------
 
-$('rotate').onclick = () => {
-  const at = ROTATIONS.indexOf(state.get().rotation);
-  state.setRotation(ROTATIONS[(at + 1) % ROTATIONS.length]);
+/**
+ * Turn this turn's tiles a quarter turn.
+ *
+ * Not a view control - the board is always drawn straight. This corrects a *scan* that
+ * came in the wrong way round, which happens on an opening photograph, where there are
+ * no earlier tiles for the automatic matching to work from. It rewrites the cells, so
+ * it is an edit like any other and undoes like one.
+ */
+$('turn-scan').onclick = () => {
+  if (!turns.canEdit()) return;
+  const turned = scan.rotateCells(state.currentTurn().cells, 1);
+  state.replaceCells(turned, 'turned by hand');
 };
 $('flip').onclick = () => {
   editor.view.direction = editor.view.direction === 'horizontal' ? 'vertical' : 'horizontal';
@@ -152,6 +160,15 @@ $('del-turn').onclick = () => {
 $('undo').onclick = () => state.undo();
 $('redo').onclick = () => state.redo();
 $('export').onclick = () => io.download();
+
+$('new-game').onclick = () => {
+  if (state.currentTurn().cells.length &&
+      !confirm('Start a new game? The current one is lost unless you have exported it.')) return;
+  const name = prompt('Name for this game', 'game-' + new Date().toISOString().slice(0, 10));
+  if (name === null) return;
+  state.load(state.createDocument(name || 'untitled'));
+  say('new game started - scan or type the opening play');
+};
 
 $('load-sample').onclick = async () => {
   try {

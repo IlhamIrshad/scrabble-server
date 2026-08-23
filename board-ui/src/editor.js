@@ -6,7 +6,6 @@
 
 import { SIZE } from './constants.js';
 import * as state from './state.js';
-import * as board from './board.js';
 
 export const view = {
   selected: null,           // canonical {row, col}, or null
@@ -24,20 +23,13 @@ export function init(notify, editable) {
   document.addEventListener('keydown', onKey);
 }
 
-/**
- * Cursor movement is worked out in *display* space and then stored canonically.
- *
- * A person typing on a board that has been turned expects the cursor to run left to
- * right across what is in front of them, not across the board's original orientation.
- */
+/** One square along, or null at the edge. The board is never drawn turned. */
 function step(sel, direction, back = false) {
-  const rot = state.get().rotation;
-  const d = board.toDisplay(sel.row, sel.col, rot);
   const delta = back ? -1 : 1;
-  const dr = direction === 'vertical' ? d.row + delta : d.row;
-  const dc = direction === 'horizontal' ? d.col + delta : d.col;
-  if (dr < 0 || dr >= SIZE || dc < 0 || dc >= SIZE) return null;
-  return board.toCanonical(dr, dc, rot);
+  const row = direction === 'vertical' ? sel.row + delta : sel.row;
+  const col = direction === 'horizontal' ? sel.col + delta : sel.col;
+  if (row < 0 || row >= SIZE || col < 0 || col >= SIZE) return null;
+  return { row, col };
 }
 
 /** The next square in this direction that has no tile on it. */

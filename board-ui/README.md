@@ -60,6 +60,11 @@ Click a square and type. That is the whole thing.
 | **Ctrl/Cmd + Z**, **Ctrl/Cmd + Shift + Z** | undo, redo |
 | **Home** / **End** | first turn, last turn |
 
+**new game** starts an empty document under a new name - use it before scanning a board
+from a different game, or the boards pile up as turns of the same one. **delete last**
+removes the final turn. Nothing is deleted from the middle: it would renumber every turn
+after it.
+
 Typing over a tile that is already there steps past it rather than replacing it, the
 way a crossword does. To change a tile, clear it first.
 
@@ -93,11 +98,23 @@ one.
 
 ### The board gets turned
 
-A board rotated between turns reads perfectly and puts every coordinate in the wrong
-place, because the premium squares are 4-fold symmetric and cannot say which way round
-anything is. So a scan is matched against the tiles already known from the previous
-turn, and turned to fit. It says so when it does. On an opening scan there is nothing
-to match against, and nothing yet to be inconsistent with.
+A photograph of a board rotated between plays reads perfectly and puts every coordinate
+in the wrong place, because the premium squares are 4-fold symmetric and cannot say
+which way round anything is.
+
+That is a property of the *photograph*, so it is corrected on the way in: a scan is
+matched against the tiles already known from the previous turn and turned to fit before
+its cells are stored. It says so when it does. The virtual board is then always the
+right way up, and is always drawn straight.
+
+The one case that cannot be corrected automatically is an opening scan, where there are
+no earlier tiles to match against. **turn scan** handles that by hand: it turns this
+turn's tiles a quarter turn, as an ordinary edit that undoes in one step.
+
+There was, briefly, a control that turned the *display* instead. It was a mistake and is
+recorded as one in `board.js`: turning the drawing moves the squares while leaving the
+letters upright, so words run backwards and the board becomes unreadable. Nothing about
+the virtual board ever needs turning.
 
 ### When a scan is wrong
 

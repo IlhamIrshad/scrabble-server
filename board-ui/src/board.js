@@ -7,43 +7,25 @@ const cells = [];           // [row][col] of display-position elements
 let host = null;
 
 /**
- * Where a stored square appears once the board has been turned, and back again.
+ * The virtual board is always drawn straight, and there is no view rotation.
  *
- * Rotation is a property of the *view*: the cells keep their true coordinates and only
- * the drawing is turned. That is what makes turning the board four times return it
- * exactly to where it started, and it keeps the document meaningful to anything that
- * reads it without knowing which way the camera was pointing.
+ * There was, and it was a mistake worth recording. Turning the *display* moves the
+ * squares while leaving every letter upright, so words run backwards and upwards and
+ * the board becomes unreadable - it looks turned without being usable, which is the
+ * worst of both.
  *
- * The premium squares are deliberately not rotated. That layout is perfectly 4-fold
- * symmetric, so rotating it changes nothing - and code that appears to rotate it
- * invites the reader to believe orientation could be recovered from it, which is
- * exactly the mistake this whole rotation control exists to work around.
+ * Rotation is a property of the *photograph*, not of the board. A camera may see the
+ * board any way round, so a scan is turned to match what is already known before its
+ * cells are ever stored (see `scan.js`). By the time anything is drawn, the question
+ * has been settled, and the board on screen is the board as it will be recorded.
  */
-export function toDisplay(row, col, rotation) {
-  let r = row, c = col;
-  for (let i = 0; i < ((rotation / 90) | 0) % 4; i++) {
-    const nr = c, nc = SIZE - 1 - r;
-    r = nr; c = nc;
-  }
-  return { row: r, col: c };
-}
-
-export function toCanonical(row, col, rotation) {
-  let r = row, c = col;
-  for (let i = 0; i < ((rotation / 90) | 0) % 4; i++) {
-    const nr = SIZE - 1 - c, nc = r;
-    r = nr; c = nc;
-  }
-  return { row: r, col: c };
-}
 
 export function build(container, onCellClick) {
   host = container;
   host.innerHTML = '';
   host.style.setProperty('--size', SIZE);
 
-  // Column letters across the top, row numbers down the side. Both are labels of the
-  // *displayed* board, so they follow the rotation like everything else on screen.
+  // Column letters across the top, row numbers down the side.
   const corner = document.createElement('div');
   corner.className = 'gutter';
   host.appendChild(corner);
@@ -77,12 +59,10 @@ export function render(doc, view) {
   const turn = state.currentTurn();
   const fresh = state.newThisTurn();
   const byPos = state.grid(turn);
-  const rot = doc.rotation;
 
-  for (let dr = 0; dr < SIZE; dr++) {
-    for (let dc = 0; dc < SIZE; dc++) {
-      const { row, col } = toCanonical(dr, dc, rot);
-      draw(cells[dr][dc], byPos[row][col], PREMIUM[dr][dc],
+  for (let row = 0; row < SIZE; row++) {
+    for (let col = 0; col < SIZE; col++) {
+      draw(cells[row][col], byPos[row][col], PREMIUM[row][col],
            fresh.has(row + ',' + col),
            view.selected && view.selected.row === row && view.selected.col === col,
            view.direction);
@@ -145,8 +125,7 @@ function draw(el, cell, premium, isNew, isSelected, direction) {
   }
 }
 
-export function focusCell(row, col, rotation) {
-  const d = toDisplay(row, col, rotation);
-  const el = cells[d.row] && cells[d.row][d.col];
+export function focusCell(row, col) {
+  const el = cells[row] && cells[row][col];
   if (el) el.focus({ preventScroll: true });
 }
