@@ -121,6 +121,22 @@ recorded as one in `board.js`: turning the drawing moves the squares while leavi
 letters upright, so words run backwards and the board becomes unreadable. Nothing about
 the virtual board ever needs turning.
 
+### Comparing against the photograph
+
+The **photograph** tab shows the same space the board occupies, so switching between
+them compares like with like. Two views:
+
+- **as taken** - the picture the reader was given.
+- **as the reader saw it** - the reader's own view, in three panels: where it decided
+  the board's edges were, the straightened board with what it read written on it, and
+  the ink it worked from. When a reading looks wrong, that middle panel usually says
+  why, and the original never will.
+
+Photographs are held in memory, not in the document. A picture is a megabyte and a game
+is twenty turns, so writing them into the JSON would make a file no editor will open,
+for something whose purpose is to be glanced at while a reading is checked. They last
+as long as the page is open, which is as long as the checking takes.
+
 ### When a scan is wrong
 
 It often will be, and the panels are there to say so. A reading that is impossible -

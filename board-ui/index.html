@@ -16,7 +16,23 @@
 
 <main>
   <section class="board-pane">
+    <div class="tabs" role="tablist">
+      <button id="tab-board" class="tab on" role="tab" aria-selected="true">board</button>
+      <button id="tab-photo" class="tab" role="tab" aria-selected="false">photograph</button>
+    </div>
+
     <div id="board" class="board"></div>
+
+    <div id="photo-pane" class="photo-pane" hidden>
+      <div class="photo-switch">
+        <label><input type="radio" name="photo-kind" value="photo" checked> as taken</label>
+        <label><input type="radio" name="photo-kind" value="debug"> as the reader saw it</label>
+      </div>
+      <img id="photo" alt="the photograph this turn was read from">
+      <p id="photo-none" class="muted">No photograph for this turn. Scans keep theirs for
+        as long as the page is open; typed-in turns never had one.</p>
+      <p id="photo-caption" class="muted"></p>
+    </div>
 
     <div class="toolbar">
       <button id="turn-scan" title="The photograph was taken a quarter turn round: turn this turn's tiles to match">&#8635; turn scan</button>

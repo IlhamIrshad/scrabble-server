@@ -12,6 +12,66 @@ import * as scan from './scan.js';
 
 const $ = id => document.getElementById(id);
 
+// -- the photograph behind a turn ---------------------------------------------
+//
+// Held in memory rather than in the document. A photograph is a megabyte and a game is
+// twenty turns, so writing them into the JSON would turn a readable file into
+// something no editor will open, for a picture whose whole purpose is to be glanced at
+// while the reading is being checked. They last as long as the page does, which is as
+// long as the checking does.
+
+const frames = new Map();          // turn index -> { photoUrl, debugUrl, name }
+let tab = 'board';
+
+function rememberFrame(index, result) {
+  const old = frames.get(index);
+  if (old && old.photoUrl) URL.revokeObjectURL(old.photoUrl);
+  frames.set(index, {
+    photoUrl: result.photo ? URL.createObjectURL(result.photo) : null,
+    debugUrl: result.debugUrl || null,
+    name: (result.photo && result.photo.name) || 'frame',
+  });
+}
+
+function showTab(which) {
+  tab = which;
+  $('tab-board').classList.toggle('on', which === 'board');
+  $('tab-photo').classList.toggle('on', which === 'photo');
+  $('tab-board').setAttribute('aria-selected', String(which === 'board'));
+  $('tab-photo').setAttribute('aria-selected', String(which === 'photo'));
+  $('board').hidden = which !== 'board';
+  $('photo-pane').hidden = which !== 'photo';
+  renderPhoto();
+}
+
+function renderPhoto() {
+  if (tab !== 'photo') return;
+  const frame = frames.get(state.get().currentTurn);
+  const kind = document.querySelector('input[name="photo-kind"]:checked').value;
+  const url = frame && (kind === 'debug' ? frame.debugUrl : frame.photoUrl);
+  $('photo').hidden = !url;
+  $('photo-none').hidden = !!url;
+  if (url) $('photo').src = url;
+  if (!frame) {
+    $('photo-caption').textContent = '';
+  } else if (kind === 'debug' && !frame.debugUrl) {
+    $('photo-none').textContent = 'The reader did not return its own view for this scan.';
+    $('photo-caption').textContent = '';
+  } else {
+    $('photo-none').textContent = 'No photograph for this turn. Scans keep theirs for as '
+      + 'long as the page is open; typed-in turns never had one.';
+    $('photo-caption').textContent = kind === 'debug'
+      ? frame.name + ' — left: where the board was found · middle: straightened, with what was read · right: the ink it worked from'
+      : frame.name + ' — the photograph as taken';
+  }
+}
+
+$('tab-board').onclick = () => showTab('board');
+$('tab-photo').onclick = () => showTab('photo');
+for (const radio of document.querySelectorAll('input[name="photo-kind"]')) {
+  radio.onchange = renderPhoto;
+}
+
 // -- start up ----------------------------------------------------------------
 
 // The board is drawn straight, so the square clicked is the square meant.
@@ -75,6 +135,7 @@ function render() {
 
   renderPool();
   renderChecks();
+  renderPhoto();
 }
 
 function renderPool() {
@@ -217,13 +278,14 @@ async function runScan(intoNewTurn) {
     say('that turn is locked - press "edit this turn" first', true);
     return;
   }
-  const blob = await scan.fromFile();
+  const blob = await scan.nextFrame();
   if (!blob) return;
 
   say('reading ' + blob.name + '…');
   setBusy(true);
   try {
     const r = await scan.scanIntoCurrentTurn(blob);
+    rememberFrame(state.get().currentTurn, r);
     const parts = [r.tiles + ' tiles'];
     if (r.blanks) parts.push(r.blanks + ' blank');
     if (r.unnamed) parts.push(r.unnamed + ' unreadable');

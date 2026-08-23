@@ -7,7 +7,6 @@
 
 import { SIZE } from './constants.js';
 import * as state from './state.js';
-import * as board from './board.js';
 
 const STORE_KEY = 'board-ui.apiBase';
 
@@ -55,12 +54,38 @@ export async function fromCamera(video) {
   return new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.92));
 }
 
+/**
+ * Where the next frame comes from.
+ *
+ * The seam itself, rather than a description of one. A photograph off disk is the
+ * source today; pointing this at a webcam is `setFrameSource(() => fromCamera(video))`
+ * and nothing else in the application changes, which is the property the whole
+ * arrangement exists for. It also means the source can be stood in for when testing,
+ * without a file dialog appearing.
+ */
+let frameSource = fromFile;
+
+export function setFrameSource(fn) {
+  frameSource = fn || fromFile;
+}
+
+export function nextFrame() {
+  return frameSource();
+}
+
 // -- the call ----------------------------------------------------------------
 
-export async function detect(blob, { corners = null } = {}) {
+export async function detect(blob, { corners = null, debug = false } = {}) {
   const form = new FormData();
   form.append('image', blob, blob.name || 'frame.jpg');
-  const query = corners ? '?corners=' + encodeURIComponent(corners) : '';
+  const params = new URLSearchParams();
+  if (corners) params.set('corners', corners);
+  // Asking for the debug render costs the reader an extra moment and gives back its own
+  // view of the board: where it thought the edges were, how the rectified board came
+  // out, and which pixels it took for ink. When a reading looks wrong that picture
+  // usually says why, and no amount of staring at the original will.
+  if (debug) params.set('debug', 'true');
+  const query = params.toString() ? '?' + params.toString() : '';
   const res = await fetch(apiBase() + '/detect' + query, { method: 'POST', body: form });
   if (!res.ok) {
     let detail = res.status + ' ' + res.statusText;
@@ -158,8 +183,8 @@ export function bestRotation(scanned, previousCells) {
  * the operator how many tiles came back, how many are doubtful and whether the board
  * had to be turned, all of which are ordinary outcomes rather than errors.
  */
-export async function scanIntoCurrentTurn(blob) {
-  const response = await detect(blob);
+export async function scanIntoCurrentTurn(blob, { debug = true } = {}) {
+  const response = await detect(blob, { debug });
   let cells = toCells(response);
 
   const previous = state.previousTurn();
@@ -179,6 +204,10 @@ export async function scanIntoCurrentTurn(blob) {
     anchor: turn.of,
     registration: response.registration || null,
     timing: response.timing_ms || null,
+    // Where to find the two pictures afterwards: the photograph itself, and the
+    // reader's annotated view of it.
+    photo: blob,
+    debugUrl: response.debug_image ? apiBase() + response.debug_image : null,
   };
 }
 
