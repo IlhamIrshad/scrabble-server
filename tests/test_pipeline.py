@@ -328,3 +328,20 @@ def test_generator_script_runs(tmp_path):
     truth = json.loads((tmp_path / "board.json").read_text())
     assert len(truth["board"]) == 15
     assert cv2.imread(str(tmp_path / "board.jpg")) is not None
+
+
+def test_square_names_are_column_letter_then_row_number():
+    """A1 is the top-left corner and O15 the bottom-right, as on a printed board.
+
+    Worth a test of its own because the wrong convention is almost invisible: rows and
+    columns transposed agree on the centre square, H8, and disagree everywhere else.
+    A game record written with them swapped is wrong in every coordinate while looking
+    entirely plausible.
+    """
+    from app.schemas import CellResult
+
+    assert CellResult(row=7, col=7).coord == "H8"      # the centre, symmetric
+    assert CellResult(row=0, col=0).coord == "A1"      # top-left
+    assert CellResult(row=14, col=14).coord == "O15"   # bottom-right
+    assert CellResult(row=0, col=14).coord == "O1"     # top-right, not A15
+    assert CellResult(row=7, col=3).coord == "D8"      # row 8, column D

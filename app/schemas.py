@@ -29,8 +29,17 @@ class CellResult(BaseModel):
 
     @property
     def coord(self) -> str:
-        """Standard Scrabble notation, e.g. H8."""
-        return f"{chr(ord('A') + self.row)}{self.col + 1}"
+        """This square in Scrabble notation, e.g. H8 for the centre.
+
+        Columns are lettered A-O left to right and rows numbered 1-15 top to
+        bottom, so the letter comes from the *column* and the number from the row.
+
+        This was the other way round until it was checked against a board-UI
+        specification. The two conventions agree on exactly one square - the centre,
+        H8, which is symmetric - so the error survived every casual glance at it, and
+        would have transposed every coordinate written into a game record.
+        """
+        return f"{chr(ord('A') + self.col)}{self.row + 1}"
 
 
 class RegistrationInfo(BaseModel):
