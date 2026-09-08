@@ -92,7 +92,38 @@ errors baseline):
 Each admits more noise than signal. This needs a different extraction for faint,
 thin strokes, not a threshold.
 
-### 2.2 Reference glyphs from real tile artwork
+### 2.2 The Protiles font does not help - measured, August 2026
+
+A TrueType file of the Protiles face was tried as a source of reference glyphs. Its
+letters come with the point value already attached as a subscript, so each was rendered
+as a tile face and put through `build_from_tiles`, which strips the value the same way
+it does for photographs of real tiles. All 26 isolated cleanly.
+
+Measured over the 31 checked boards of the target set:
+
+| templates | errors |
+|---|---|
+| Protiles artwork + Arial fallback (current) | **70** |
+| Protiles font alone | 87 |
+| artwork + Protiles font | 95 |
+| artwork + Protiles font + Arial | 69 |
+
+It does not help, and the reason is worth keeping. The bank *already* uses genuine
+Protiles artwork from the Zyzzyva install, so the font is the same typeface arriving a
+second time. A letter scores as its best-matching variant, so a near-duplicate variant
+gives every letter another way to be matched without telling the matcher anything new -
+and the one confusion that matters got worse, 'O' read where 'Q' belonged going from 7
+to 10, against 'O' for 'C' improving from 2 to 0. The best configuration is one error
+better than the current one out of 6975 cells, which is noise.
+
+The general lesson, already written into `classify._build` and now measured: more
+reference shapes are not automatically better. A second set earns its place only by
+describing the tiles *differently and correctly*.
+
+This would still be worth trying for a tile set whose artwork is **not** available, where
+a font would be the only reference there is.
+
+### 2.3 Reference glyphs from real tile artwork
 
 **Needs the user, not the code.** ~27 square-on photographs per tile set, one per
 letter, feeding `settings.template_tiles` via `scripts/build_templates.py`.
