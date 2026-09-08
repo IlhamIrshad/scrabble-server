@@ -17,3 +17,9 @@ venv/
 /photos_excluded/
 /fixtures/
 board-ui/.testphotos/
+
+# The Protiles typeface. Same rule as the tile artwork above: it is someone else's
+# work, it is read from a local copy, and it is not ours to redistribute. Measured as
+# no help to reading anyway - see BACKLOG.md section 2.2.
+_protiles.ttf
+*.ttf
