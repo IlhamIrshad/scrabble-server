@@ -134,7 +134,7 @@ that, and the test suite already records that the font-rendered 'Q' - the larges
 single confusion remaining - reads correctly when given real tile artwork. Artwork
 read from the Zyzzyva install is never committed or redistributed.
 
-### 2.3 Blank tiles on sets whose blanks are not plain
+### 2.4 Blank tiles on sets whose blanks are not plain
 
 The current rule is "tile colour, no ink, therefore blank", which is exactly right for
 Protiles - they carry no marking whatsoever. Other sets print a star or similar on the
