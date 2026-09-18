@@ -31,7 +31,7 @@ const CAMERA = svg('<path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-
 // long as the checking does.
 
 const frames = new Map();          // turn index -> { photoUrl, debugUrl, name }
-let tab = 'board';
+let photoOpen = false;
 // A scan writes to state, which re-renders, which would otherwise re-enable the very
 // buttons that started it while it is still running.
 let busy = false;
@@ -46,20 +46,35 @@ function rememberFrame(index, result) {
   });
 }
 
-function showTab(which) {
-  tab = which;
-  $('tab-board').setAttribute('aria-selected', String(which === 'board'));
-  $('tab-photo').setAttribute('aria-selected', String(which === 'photo'));
-  $('board').hidden = which !== 'board';
-  $('photo-pane').hidden = which !== 'photo';
+/**
+ * Open or close the photograph beside the board.
+ *
+ * Beside it, not instead of it. Checking a reading means looking at the square and the
+ * tile it came from at the same time, and the switch this replaces made you hold one in
+ * your head while you looked at the other. It also put the photograph below a board on
+ * a page that does not scroll, where on a short window it could not be reached at all.
+ *
+ * The board narrows to make room rather than being covered, so every square stays
+ * clickable and the correction can be made while the picture is still up.
+ */
+function showPhoto(on) {
+  photoOpen = on;
+  document.body.classList.toggle('split', on);
+  $('show-photo').setAttribute('aria-pressed', String(on));
+  $('show-photo').classList.toggle('on', on);
+  $('photo-pane').hidden = !on;
   renderPhoto();
 }
 
 function renderPhoto() {
-  if (tab !== 'photo') return;
+  if (!photoOpen) return;
   const frame = frames.get(state.get().currentTurn);
   const kind = document.querySelector('input[name="photo-kind"]:checked').value;
   const url = frame && (kind === 'debug' ? frame.debugUrl : frame.photoUrl);
+  // Every new picture starts fitted; a zoom left over from the last one would open on
+  // some arbitrary corner of it.
+  if ($('photo').src !== url) $('photo-frame').classList.remove('zoomed');
+  $('photo-zoom').hidden = !url;
   $('photo').hidden = !url;
   $('photo-none').hidden = !!url;
   if (url) $('photo').src = url;
@@ -77,8 +92,22 @@ function renderPhoto() {
   }
 }
 
-$('tab-board').onclick = () => showTab('board');
-$('tab-photo').onclick = () => showTab('photo');
+$('show-photo').onclick = () => showPhoto(!photoOpen);
+$('hide-photo').onclick = () => showPhoto(false);
+
+/**
+ * Fitted, or full size with the well scrolling under it.
+ *
+ * Fitted is right for the photograph as taken - a whole board, and you are comparing
+ * its shape with the grid beside it. It is wrong for the reader's own view, which is
+ * three panels side by side and ends up a third as tall as it is wide: the panel that
+ * says *why* a reading went wrong is the one that gets too small to read.
+ */
+$('photo-zoom').onclick = () => {
+  const zoomed = $('photo-frame').classList.toggle('zoomed');
+  $('photo-zoom').setAttribute('aria-label',
+    zoomed ? 'Fit the photograph to the panel' : 'Show the photograph at full size');
+};
 for (const radio of document.querySelectorAll('input[name="photo-kind"]')) {
   radio.onchange = renderPhoto;
 }
@@ -89,7 +118,7 @@ $('see-reader').onclick = e => {
   e.preventDefault();
   const debug = document.querySelector('input[name="photo-kind"][value="debug"]');
   if (debug) debug.checked = true;
-  showTab('photo');
+  showPhoto(true);
 };
 
 // -- start up ----------------------------------------------------------------
@@ -278,7 +307,7 @@ function chips(host, cells) {
       + (cell.confidence != null ? ' · confidence ' + cell.confidence.toFixed(2) : ' · certain');
     // The correction happens on the board, not in the rail. Listing the squares is only
     // useful if it takes you to them.
-    chip.onclick = () => { showTab('board'); editor.select(cell.row, cell.col); };
+    chip.onclick = () => editor.select(cell.row, cell.col);
     host.appendChild(chip);
   }
 }
@@ -449,6 +478,7 @@ async function runScan(intoNewTurn) {
   try {
     const r = await scan.scanIntoCurrentTurn(blob);
     rememberFrame(state.get().currentTurn, r);
+    renderPhoto();
 
     // Keep the photograph with the game, not just in this tab. A transcript questioned
     // weeks later can only be settled by the picture, and by then the board has been

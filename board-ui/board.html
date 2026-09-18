@@ -40,13 +40,13 @@
 <main class="workspace">
   <section class="board-pane">
     <div class="pane-head">
-      <!-- A view switch, not an action: these used to be filled with the accent colour,
-           which is what the primary button uses, so "photograph" read as something that
-           was about to happen. -->
-      <div class="segmented" role="tablist">
-        <button id="tab-board" role="tab" aria-selected="true">Board</button>
-        <button id="tab-photo" role="tab" aria-selected="false">Photograph</button>
-      </div>
+      <!-- The photograph opens *beside* the board rather than instead of it. Checking a
+           reading means looking at both at once, and a switch made you hold one in your
+           head while you looked at the other. -->
+      <button id="show-photo" aria-pressed="false" title="Show the photograph beside the board">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+        Photograph
+      </button>
 
       <span class="spacer"></span>
 
@@ -57,17 +57,30 @@
       <span id="cursor-label" class="muted small mono"></span>
     </div>
 
-    <div id="board" class="board"></div>
+    <div class="stage">
+      <div id="board" class="board"></div>
 
-    <div id="photo-pane" class="photo-pane" hidden>
-      <div class="photo-switch">
-        <label><input type="radio" name="photo-kind" value="photo" checked> as taken</label>
-        <label><input type="radio" name="photo-kind" value="debug"> as the reader saw it</label>
+      <div id="photo-pane" class="photo-pane" hidden>
+        <div class="photo-switch">
+          <label><input type="radio" name="photo-kind" value="photo" checked> as taken</label>
+          <label><input type="radio" name="photo-kind" value="debug"> as the reader saw it</label>
+          <span class="spacer"></span>
+          <button id="hide-photo" class="icon quiet" aria-label="Close the photograph">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>
+          </button>
+        </div>
+        <div id="photo-frame" class="photo-frame">
+          <!-- Fitted to the panel by default and shown at full size when clicked. The
+               reader's own view is three panels side by side, so fitted it is a third
+               as tall as it is wide - too small to see the thing it exists to show. -->
+          <button id="photo-zoom" class="photo-zoom" aria-label="Show the photograph at full size">
+            <img id="photo" alt="the photograph this turn was read from">
+          </button>
+          <p id="photo-none" class="muted">No photograph for this turn. Scans keep theirs
+            for as long as the page is open; typed-in turns never had one.</p>
+        </div>
+        <p id="photo-caption" class="muted small"></p>
       </div>
-      <img id="photo" alt="the photograph this turn was read from">
-      <p id="photo-none" class="muted">No photograph for this turn. Scans keep theirs for
-        as long as the page is open; typed-in turns never had one.</p>
-      <p id="photo-caption" class="muted small"></p>
     </div>
 
     <!-- What the reader made of the photograph, in a sentence, directly under the board

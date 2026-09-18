@@ -72,6 +72,11 @@
   --rail: 366px;
   --chrome-v: 252px;        /* top bar + status strip + ribbon + the paddings between */
   --chrome-h: 92px;         /* page padding either side of board and rail */
+  /* Everything left for the board and the photograph once the rail and the page
+     padding are taken out, and how much of it the photograph is using. Zero until the
+     photograph is opened, so the board is measured against the whole width. */
+  --stage: calc(100vw - var(--rail) - var(--chrome-h));
+  --photo-w: 0px;
   --radius: 10px;
   --radius-sm: 7px;
 }
@@ -286,12 +291,33 @@ input:focus, select:focus, textarea:focus {
 
 /* The board sizes itself from whichever runs out first, the window's height or its
    width, using the named measurements at the top of this file. */
-.board {
+/* Board and photograph share one row. Checking a reading means looking at both at
+   once - the tab that swapped them made you hold one in your head while you looked at
+   the other, and on a short window the photograph landed below the fold of a page that
+   does not scroll. */
+.stage {
+  /* The cell size is settled here rather than on the board, because the photograph
+     beside it has to be exactly as tall as the board and cannot see a variable set on
+     its sibling. `board.js` writes --size onto this element for the same reason. */
   --size: 15;
   --cell-px: min(
     calc((100vh - var(--chrome-v)) / (var(--size) + 1)),
-    calc((100vw - var(--rail) - var(--chrome-h)) / (var(--size) + 1))
+    calc((var(--stage) - var(--photo-w) - 14px) / (var(--size) + 1))
   );
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 14px;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+
+body.split { --photo-w: calc((var(--stage) - 14px) * 0.46); }
+
+.board {
+  --size: 15;
+  flex: 0 0 auto;
   display: grid;
   grid-template-columns: repeat(calc(var(--size) + 1), var(--cell-px));
   grid-auto-rows: var(--cell-px);
@@ -695,27 +721,92 @@ footer .primary svg { width: 16px; height: 16px; }
 
 /* -- the photograph -------------------------------------------------------- */
 
-/* It occupies the same space the board does, so switching between them compares like
-   with like rather than making you hunt across the screen. */
+/* It stands beside the board, the same height, so a square and the tile it was read
+   from are a glance apart. */
 .photo-pane {
+  flex: 0 0 var(--photo-w);
+  width: var(--photo-w);
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  align-items: center;
   gap: 8px;
-  max-width: calc(100vw - var(--rail) - var(--chrome-h));
+  /* Exactly the board's height, so the two line up and the page never grows. */
+  height: calc(var(--cell-px) * (var(--size) + 1) + 8px);
 }
 .photo-pane[hidden] { display: none; }
-.photo-switch { display: flex; gap: 16px; font-size: 13px; color: var(--muted); }
+
+.photo-switch {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-size: 12.5px;
+  color: var(--muted);
+  flex: 0 0 auto;
+}
 .photo-switch label { display: inline-flex; align-items: center; gap: 5px; cursor: pointer; }
-#photo {
-  max-height: calc(100vh - var(--chrome-v) + 60px);
-  max-width: 100%;
-  object-fit: contain;
+.photo-switch button.icon { width: 28px; min-height: 28px; }
+
+/* A well the picture sits in. A 4K photograph of a board is far taller than the space
+   beside it, so it is fitted rather than cropped, and the well scrolls when the reader's
+   own three-panel view is wider than it is tall. */
+.photo-frame {
+  flex: 1 1 auto;
+  min-height: 0;
+  /* Never let the picture inside decide how wide this is: a full-size scan is three
+     thousand pixels across and would push the whole page sideways. */
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px;
+  background: var(--sunk);
   border: 1px solid var(--line);
-  border-radius: 6px;
-  background: var(--panel);
+  border-radius: 8px;
+  overflow: auto;
+}
+/* The picture is a button, because clicking it does something: it swaps between fitted
+   and full size. A div with a click handler would be skipped by Tab. */
+.photo-zoom {
+  /* Fills the well, so the picture's own `max-height: 100%` has a definite height to
+     measure against. Against an auto height a percentage means nothing, and the image
+     collapses to nothing at all. */
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: zoom-in;
+}
+.photo-zoom:hover:not(:disabled) { border: 0; }
+.photo-zoom[hidden] { display: none; }
+
+#photo {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: 4px;
 }
 #photo[hidden] { display: none; }
+
+/* Full size, with the well scrolling under it. Aligned to the start rather than
+   centred: a centred flex child that overflows is clipped at the top and left, and
+   those are the corners you cannot scroll back to. */
+.photo-frame.zoomed { align-items: flex-start; justify-content: flex-start; }
+.photo-frame.zoomed .photo-zoom {
+  width: auto;
+  height: auto;
+  max-width: none;
+  max-height: none;
+  cursor: zoom-out;
+}
+.photo-frame.zoomed #photo { max-width: none; max-height: none; }
+#photo-none { margin: 0; padding: 0 14px; text-align: center; font-size: 12.5px; }
+#photo-caption { flex: 0 0 auto; margin: 0; }
 
 /* -- dialogs --------------------------------------------------------------- */
 
@@ -1001,8 +1092,18 @@ body.dashboard { display: block; }
   /* Stacked, the page is a document again and scrolls as one. */
   body.app { height: auto; min-height: 100vh; overflow: auto; }
   .panels { width: auto; flex: 0 0 auto; overflow: visible; }
-  .photo-pane { max-width: 100%; }
-  .board { --cell-px: min(calc((100vw - 40px) / 16), 44px); }
+
+  /* Not enough width for two columns, so the photograph goes under the board instead
+     of beside it - which is fine here, because at this width the page scrolls again. */
+  .stage {
+    flex-wrap: wrap;
+    --cell-px: min(calc((100vw - 40px) / (var(--size) + 1)), 44px);
+  }
+  body.split { --photo-w: 0px; }
+  /* A definite height, not `auto` with a cap: the picture inside sizes itself as a
+     percentage of this box, and a percentage of an auto height means nothing, so the
+     photograph would come out at its full pixel size and overflow the well. */
+  .photo-pane { flex: 1 1 100%; width: 100%; height: 72vh; }
 }
 
 @media (max-width: 720px) {

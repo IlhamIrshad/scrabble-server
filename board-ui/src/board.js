@@ -24,6 +24,10 @@ export function build(container, onCellClick) {
   host = container;
   host.innerHTML = '';
   host.style.setProperty('--size', SIZE);
+  // The stage sizes the cells, because the photograph standing beside the board has to
+  // match its height and cannot read a variable set on its sibling. One board size,
+  // written wherever it is needed.
+  if (host.parentElement) host.parentElement.style.setProperty('--size', SIZE);
 
   // Column letters across the top, row numbers down the side.
   const corner = document.createElement('div');

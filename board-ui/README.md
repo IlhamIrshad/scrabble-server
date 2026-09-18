@@ -192,14 +192,32 @@ the virtual board ever needs turning.
 
 ### Comparing against the photograph
 
-The **photograph** tab shows the same space the board occupies, so switching between
-them compares like with like. Two views:
+**Photograph** opens the picture *beside* the board, not instead of it. Checking a
+reading means looking at a square and the tile it was read from at the same time, and a
+switch between the two makes you hold one in your head while you look at the other. The
+board narrows to make room rather than being covered, so every square stays clickable
+and the correction can be made while the picture is still up.
+
+It was a tab first, and that was wrong twice over: the board did not actually go away
+when the tab changed - `.board` sets `display: grid`, which beats the `hidden`
+attribute - so the photograph was appended *below* a full-height board, on a page that
+deliberately does not scroll. On a short window it could not be reached at all.
+
+Two views:
 
 - **as taken** - the picture the reader was given.
 - **as the reader saw it** - the reader's own view, in three panels: where it decided
   the board's edges were, the straightened board with what it read written on it, and
   the ink it worked from. When a reading looks wrong, that middle panel usually says
   why, and the original never will.
+
+Click the picture to swap between fitted and full size, with the well scrolling under
+it. Fitted is right for a photograph of a whole board; it is wrong for the reader's own
+view, which is three panels side by side and ends up a third as tall as it is wide -
+the panel that explains the mistake is exactly the one that gets too small to read.
+
+Below 900px there is no room for two columns, so the photograph goes under the board
+instead - which is fine there, because at that width the page scrolls again.
 
 Photographs are held in memory, not in the document. A picture is a megabyte and a game
 is twenty turns, so writing them into the JSON would make a file no editor will open,
