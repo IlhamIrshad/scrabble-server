@@ -4,71 +4,187 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Sign in — Scrabble boards</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 </head>
-<body class="centred">
+<body class="door">
 
-<form id="form" class="card" autocomplete="on">
-  <h1>Scrabble boards</h1>
-  <p class="muted">Sign in to open your saved games.</p>
+<!-- The left half is a board wearing the marks the reader puts on one when it finds
+     it: the corner brackets are the quad registration reports, and the amber tiles are
+     what a diff against the previous turn would call new. It is decoration, but it is
+     decoration made of the thing the program actually does. -->
+<section class="door-art" aria-hidden="true">
+  <span class="wordmark">
+    <span class="tile-mark big">S</span>
+    <span class="name">Scrabble boards</span>
+  </span>
 
-  <label class="field">
-    username
-    <input id="username" name="username" autocomplete="username" autofocus required>
-  </label>
+  <div class="lede">
+    <h1>A photograph in.<em>A game record out.</em></h1>
+    <p>Boards read by camera, checked by you, kept as files you can open.</p>
+  </div>
 
-  <label class="field">
-    password
-    <input id="password" name="password" type="password" autocomplete="current-password" required>
-  </label>
+  <p class="caption"><span class="bracket"></span> the quad the reader found</p>
 
-  <button id="go" class="primary wide" type="submit">sign in</button>
+  <div class="crop">
+    <span class="corner tl"></span>
+    <span class="corner tr"></span>
+    <span class="corner bl"></span>
+    <span class="corner br"></span>
 
-  <p id="message" class="fail" hidden></p>
-  <p id="server" class="muted small"></p>
-</form>
+    <div class="board">
+      <div class="cell premium p-TW"><span class="premium-label">TW</span></div>
+      <div class="cell"></div>
+      <div class="cell"></div>
+      <div class="cell premium p-DL"><span class="premium-label">DL</span></div>
+      <div class="cell"></div>
+
+      <div class="cell"></div>
+      <div class="cell premium p-DW"><span class="premium-label">DW</span></div>
+      <div class="cell"></div>
+      <div class="cell"></div>
+      <div class="cell premium p-TL"><span class="premium-label">TL</span></div>
+
+      <div class="cell tile"><span class="letter">B</span><span class="value">3</span></div>
+      <div class="cell tile"><span class="letter">O</span><span class="value">1</span></div>
+      <div class="cell tile"><span class="letter">A</span><span class="value">1</span></div>
+      <div class="cell tile"><span class="letter">R</span><span class="value">1</span></div>
+      <div class="cell tile"><span class="letter">D</span><span class="value">2</span></div>
+
+      <div class="cell premium p-TL"><span class="premium-label">TL</span></div>
+      <div class="cell"></div>
+      <div class="cell tile is-new is-flagged"><span class="letter">X</span><span class="value">8</span><span class="flag-mark">?</span></div>
+      <div class="cell"></div>
+      <div class="cell"></div>
+
+      <div class="cell"></div>
+      <div class="cell premium p-DL"><span class="premium-label">DL</span></div>
+      <div class="cell tile is-new"><span class="letter">E</span><span class="value">1</span></div>
+      <div class="cell"></div>
+      <div class="cell premium p-DW"><span class="premium-label">DW</span></div>
+
+      <div class="cell"></div>
+      <div class="cell"></div>
+      <div class="cell tile is-new"><span class="letter">D</span><span class="value">2</span></div>
+      <div class="cell premium p-TL"><span class="premium-label">TL</span></div>
+      <div class="cell"></div>
+    </div>
+  </div>
+</section>
+
+<section class="door-form">
+  <form id="form" autocomplete="on">
+    <h1>Sign in</h1>
+    <p class="sub">to open your saved games.</p>
+
+    <div class="fields">
+      <label class="field">
+        <span class="label-caps">Username</span>
+        <input id="username" name="username" autocomplete="username" autofocus required>
+      </label>
+
+      <label class="field">
+        <span class="label-caps">Password</span>
+        <input id="password" name="password" type="password" autocomplete="current-password" required>
+      </label>
+    </div>
+
+    <button id="go" class="primary wide" type="submit">Sign in</button>
+
+    <div id="notice" class="notice" hidden>
+      <span class="mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="13"/><line x1="12" y1="16.5" x2="12.01" y2="16.5"/></svg>
+      </span>
+      <div>
+        <p id="notice-title" class="title"></p>
+        <p id="notice-body" class="body"></p>
+        <pre id="notice-cmd" hidden></pre>
+      </div>
+    </div>
+
+    <div class="server-line">
+      <span id="server" class="pill"><span class="dot"></span><span id="server-text" class="mono">checking the reader…</span></span>
+      <button id="change-base" type="button">change</button>
+    </div>
+
+    <p class="footnote">A doorbell, not a lock — it keeps a stray tab from writing over
+      a game in progress, and nothing more.</p>
+  </form>
+</section>
 
 <script type="module">
 import * as api from './src/api.js';
 
 const $ = id => document.getElementById(id);
 
-function say(text, bad = true) {
-  $('message').hidden = !text;
-  $('message').textContent = text;
-  $('message').className = bad ? 'fail' : 'muted';
+/**
+ * Say what happened and what to do about it.
+ *
+ * The three things that stop this page working - no password set, no reader running,
+ * wrong password - look identical from the keyboard unless they are named, and two of
+ * them are fixed by a command rather than by trying again.
+ */
+function notice(title, body = '', command = '') {
+  $('notice').hidden = !title;
+  $('notice-title').textContent = title;
+  $('notice-body').textContent = body;
+  $('notice-body').hidden = !body;
+  $('notice-cmd').hidden = !command;
+  $('notice-cmd').textContent = command;
 }
 
-// If a password was never set the server refuses every attempt, and without saying so
-// that is indistinguishable from getting the password wrong - so it is said here,
-// before anybody starts doubting what they typed.
+function server(text, state) {
+  $('server-text').textContent = text;
+  $('server').className = 'pill' + (state ? ' ' + state : '');
+}
+
 api.passwordConfigured().then(info => {
-  $('server').textContent = 'reader at ' + api.apiBase();
+  server('reader at ' + api.apiBase().replace(/^https?:\/\//, ''), 'ok');
+  notice('');
   if (!info.configured) {
-    say('No password is set on the server. Put UI_PASSWORD in .env and restart it.');
+    notice(
+      'No password is set on the server.',
+      'Every attempt is refused until there is one — which otherwise looks exactly like a mistyped password. Put UI_PASSWORD in .env and restart the reader.',
+    );
     $('go').disabled = true;
   } else if (info.username) {
     $('username').value = info.username;
     $('password').focus();
   }
 }).catch(() => {
-  $('server').textContent = 'cannot reach the server at ' + api.apiBase();
-  say('The server is not running. Start it with: python -m uvicorn app.main:app --port 8000');
+  server('no reader at ' + api.apiBase().replace(/^https?:\/\//, ''), 'bad');
+  notice(
+    'Cannot reach the reader.',
+    'Games live on it, so the page needs it to sign in and to load anything. Start it from the repository root:',
+    'python -m uvicorn app.main:app --port 8000',
+  );
   $('go').disabled = true;
 });
 
 // Already signed in? Go straight through rather than asking again.
 api.signedIn().then(ok => { if (ok) location.replace('./'); });
 
+$('change-base').onclick = () => {
+  const next = prompt('Address of the board reader', api.apiBase());
+  if (next === null) return;
+  api.setApiBase(next.trim());
+  location.reload();
+};
+
 $('form').addEventListener('submit', async e => {
   e.preventDefault();
-  say('');
+  notice('');
   $('go').disabled = true;
   try {
     await api.login($('username').value, $('password').value);
-    location.replace('./');
+    const next = new URLSearchParams(location.search).get('next') || '';
+    location.replace('./' + (next.startsWith('?') ? 'board.html' + next : ''));
   } catch (err) {
-    say(err.message);
+    notice(err.message === 'wrong username or password'
+      ? 'That username and password were not accepted.'
+      : err.message);
     $('password').value = '';
     $('password').focus();
   } finally {

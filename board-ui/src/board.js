@@ -114,7 +114,7 @@ function draw(el, cell, premium, isNew, isSelected, direction) {
     if (cell.confidence != null && cell.confidence < FLAG_BELOW) {
       const warn = document.createElement('span');
       warn.className = 'flag-mark';
-      warn.textContent = '!';
+      warn.textContent = '?';
       el.appendChild(warn);
     }
     el.title = describe(cell);
@@ -142,7 +142,11 @@ function describe(cell) {
   else parts.push('read as ' + cell.letter + ' (' + (TILES[cell.letter] ? TILES[cell.letter][1] : '?') + ' points)');
 
   if (cell.confidence == null) {
-    parts.push(cell.source === 'manual' ? 'typed in by hand' : 'not from the reader');
+    if (cell.source === 'manual') parts.push('typed in by hand');
+    // A confirmed tile is stored exactly as a typed one, so the only way to tell them
+    // apart afterwards is to say which it was.
+    else if (cell.source === 'confirmed') parts.push('checked and confirmed by hand');
+    else parts.push('not from the reader');
   } else if (cell.confidence < FLAG_BELOW) {
     parts.push('confidence ' + cell.confidence.toFixed(2) + ' - below ' + FLAG_BELOW + ', worth checking');
   } else {

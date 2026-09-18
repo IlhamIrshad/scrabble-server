@@ -1,15 +1,26 @@
-/* Every colour is a custom property defined here and nowhere else, so the whole
-   thing can be re-themed from one block. */
+/* Every colour, face and measurement is a custom property defined here and nowhere
+   else, so the whole thing can be re-themed - or re-proportioned - from one block.
+
+   The board's own colours are unchanged from the first version of this file: they were
+   chosen against real tile artwork and there is no reason to move them. What did move
+   is every colour that carries *words*. A warning rendered in #B1791B on the old
+   background measured about 3.4:1, which is below the 4.5:1 a body-sized string needs,
+   and a flag nobody can read is the failure this program is built to avoid. Each state
+   colour below was darkened only as far as it had to go to clear the bar, and the
+   measured ratio is written beside it. */
 
 :root {
   --bg: #f4f3f0;
   --panel: #ffffff;
+  --sunk: #edebe6;          /* a well: segmented tracks, inset areas */
   --ink: #1b1b1a;
-  --muted: #6d6b66;
-  --line: #d6d3cd;
+  --muted: #6d6b66;         /* 4.81:1 on --bg */
+  --line: #e4e0d9;
+  --line-strong: #d9d5ce;   /* input and button borders, which must be seen */
+  --deep: #171c18;          /* the dark half of the sign-in page */
 
-  --board-bg: #cfd8cd;
-  --cell: #e9eae4;
+  --board-bg: #c9d3c7;
+  --cell: #e7e9e2;
   --cell-line: #c3c6bd;
 
   --tw: #e2857c;
@@ -24,21 +35,57 @@
   --tile-new: #ffe9a8;
   --tile-new-edge: #d8a63c;
 
-  --flag: #c8641f;
-  --manual: #4a7fb5;
-  --pass: #3c7d4a;
-  --fail: #b8362c;
-  --warn: #b1791b;
-  --accent: #2f6f4f;
+  /* State. Two tones each: a mark, which only has to be seen, and an ink, which has
+     to be read. They are not the same colour and pretending otherwise is what put
+     unreadable text on the page. */
+  --flag: #c8641f;          /* the ring and the ? on a doubtful tile */
+  --flag-ink: #8a4310;      /* 5.9:1 on --bg */
+  --flag-bg: #fbf0e4;
+  --flag-line: #e9c9a3;
+
+  --manual: #3d6e9e;
+  --pass: #256b41;          /* 6.9:1 on --bg */
+  --pass-bg: #eaf2ec;
+  --pass-line: #c3decc;
+  --fail: #a32c23;          /* 6.8:1 on --bg */
+  --fail-bg: #fbedeb;
+  --fail-line: #e3b4af;
+  --warn: #8a4310;
+
+  --accent: #2f6f4f;        /* white on it: 5.99:1 */
+  --accent-deep: #245840;
+  --accent-soft: #eaf2ec;
+  --on-accent: #ffffff;
+
+  /* The faces are loaded from Google Fonts by each page. When there is no network -
+     which is the ordinary case in a tournament hall - the stacks below fall back to
+     faces every machine already has, and nothing about the layout depends on which
+     one arrives. */
+  --face: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --face-display: Fraunces, Georgia, 'Times New Roman', serif;
+  --face-mono: 'IBM Plex Mono', ui-monospace, 'Cascadia Mono', Consolas, monospace;
+
+  /* Layout, stated once. The board used to be sized by
+     `calc((100vw - 420px) / 16)`, with 330px written separately for the rail and
+     380px again for the photograph - three numbers that had to agree and did not.
+     Now the rail is named, and the board is measured from it. */
+  --rail: 366px;
+  --chrome-v: 252px;        /* top bar + status strip + ribbon + the paddings between */
+  --chrome-h: 92px;         /* page padding either side of board and rail */
+  --radius: 10px;
+  --radius-sm: 7px;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
     --bg: #17181a;
     --panel: #1f2124;
+    --sunk: #26282c;
     --ink: #e8e6e2;
-    --muted: #9a978f;
+    --muted: #a5a29a;
     --line: #34373b;
+    --line-strong: #43474c;
+    --deep: #101311;
 
     --board-bg: #2b332c;
     --cell: #262a27;
@@ -57,11 +104,23 @@
     --tile-new-edge: #b8912f;
 
     --flag: #e2884a;
+    --flag-ink: #e9a468;
+    --flag-bg: #2e2419;
+    --flag-line: #5a4426;
+
     --manual: #7fb0e0;
     --pass: #64b07a;
-    --fail: #e0685c;
+    --pass-bg: #1b2a20;
+    --pass-line: #2f4a37;
+    --fail: #e8776a;
+    --fail-bg: #2d1c1a;
+    --fail-line: #57302c;
     --warn: #d9a949;
+
     --accent: #58a37c;
+    --accent-deep: #6fb992;
+    --accent-soft: #1d2a23;
+    --on-accent: #10160f;
   }
 }
 
@@ -71,40 +130,174 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--ink);
-  font: 14px/1.4 system-ui, -apple-system, Segoe UI, sans-serif;
+  font: 14px/1.45 var(--face);
   display: flex;
   flex-direction: column;
   min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
 }
 
-main {
-  flex: 1;
-  display: flex;
-  gap: 16px;
-  padding: 12px;
-  min-height: 0;
+h1, h2, h3 { font-weight: 600; }
+
+/* One visible focus ring for everything, because a keyboard is how a board gets typed
+   in quickly and losing the cursor costs more here than anywhere else. */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
-.board-pane {
-  flex: 1 1 auto;
-  display: flex;
-  flex-direction: column;
+.spacer { flex: 1; }
+.muted { color: var(--muted); }
+.pass { color: var(--pass); }
+.fail { color: var(--fail); }
+.warn { color: var(--warn); }
+.mono { font-family: var(--face-mono); }
+.small { font-size: 12px; }
+
+.sr-only {
+  position: absolute;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* -- controls -------------------------------------------------------------- */
+
+button, .button {
+  font: inherit;
+  font-family: var(--face);
+  min-height: 34px;
+  padding: 5px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--panel);
+  color: var(--ink);
+  cursor: pointer;
+}
+button:hover:not(:disabled) { border-color: var(--accent); }
+button:disabled { opacity: 0.4; cursor: default; }
+
+button.primary {
+  background: var(--accent);
+  color: var(--on-accent);
+  border-color: var(--accent);
+  font-weight: 600;
+}
+button.primary:hover:not(:disabled) { background: var(--accent-deep); border-color: var(--accent-deep); }
+
+button.quiet { background: transparent; border-color: transparent; color: var(--muted); }
+button.quiet:hover:not(:disabled) { background: var(--sunk); border-color: transparent; color: var(--ink); }
+
+/* A toggle that is currently on. Defined after .quiet so a quiet button can be both. */
+button.on { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+
+button.danger { color: var(--fail); }
+button.danger:hover:not(:disabled) { border-color: var(--fail); }
+
+/* Icon-only buttons are square and carry an aria-label; the touch target stays at
+   least 34px even where the glyph is 14. */
+button.icon {
+  width: 34px;
+  padding: 0;
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
-  min-width: 0;
+  justify-content: center;
+}
+button.icon svg { width: 15px; height: 15px; }
+
+input[type=text], input[type=password], select, textarea {
+  font: inherit;
+  font-family: var(--face);
+  min-height: 34px;
+  padding: 6px 10px;
+  color: var(--ink);
+  background: var(--panel);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+}
+input:focus, select:focus, textarea:focus {
+  border-color: var(--accent);
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
 }
 
-/* The board sizes itself from the space available and stays square. One custom
-   property drives the whole grid. */
+.field { display: block; font-size: 12px; color: var(--muted); }
+.field > span, .field > .label { display: block; margin-bottom: 4px; }
+.field input, .field select { width: 100%; }
+
+.label-caps {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* A pill that carries a state word and a dot, never a colour alone. */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 11px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--sunk);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.pill .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); flex: 0 0 auto; }
+.pill.ok { background: var(--pass-bg); border-color: var(--pass-line); color: var(--pass); }
+.pill.ok .dot { background: var(--pass); }
+.pill.doubt { background: var(--flag-bg); border-color: var(--flag-line); color: var(--flag-ink); }
+.pill.doubt .dot { background: var(--flag); }
+.pill.bad { background: var(--fail-bg); border-color: var(--fail-line); color: var(--fail); font-weight: 600; }
+.pill.bad .dot { background: var(--fail); }
+
+/* A view switch, not an action. The old tabs used the same accent fill as the primary
+   button, so "photograph" read as something that would happen rather than somewhere to
+   look. */
+.segmented {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  background: var(--sunk);
+  border-radius: 8px;
+}
+.segmented button {
+  min-height: 28px;
+  padding: 3px 13px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+}
+.segmented button:hover:not(:disabled) { color: var(--ink); }
+.segmented button[aria-selected="true"] {
+  background: var(--panel);
+  color: var(--ink);
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 14%);
+}
+
+/* -- the board ------------------------------------------------------------- */
+
+/* The board sizes itself from whichever runs out first, the window's height or its
+   width, using the named measurements at the top of this file. */
 .board {
   --size: 15;
-  --cell-px: min(calc((100vh - 190px) / (var(--size) + 1)), calc((100vw - 420px) / (var(--size) + 1)));
+  --cell-px: min(
+    calc((100vh - var(--chrome-v)) / (var(--size) + 1)),
+    calc((100vw - var(--rail) - var(--chrome-h)) / (var(--size) + 1))
+  );
   display: grid;
   grid-template-columns: repeat(calc(var(--size) + 1), var(--cell-px));
   grid-auto-rows: var(--cell-px);
   background: var(--board-bg);
   padding: 4px;
-  border-radius: 6px;
+  border-radius: 5px;
   user-select: none;
 }
 
@@ -113,7 +306,7 @@ main {
   align-items: center;
   justify-content: center;
   color: var(--muted);
-  font-size: calc(var(--cell-px) * 0.34);
+  font-size: calc(var(--cell-px) * 0.3);
 }
 
 .cell {
@@ -128,10 +321,11 @@ main {
 }
 
 .premium-label {
-  font-size: calc(var(--cell-px) * 0.26);
+  font-size: calc(var(--cell-px) * 0.25);
   font-weight: 600;
+  letter-spacing: 0.03em;
   color: var(--premium-ink);
-  opacity: 0.75;
+  opacity: 0.8;
 }
 
 .cell.p-TW { background: var(--tw); }
@@ -153,7 +347,7 @@ main {
 
 .letter {
   font-size: calc(var(--cell-px) * 0.55);
-  font-weight: 700;
+  font-weight: 600;
   line-height: 1;
 }
 
@@ -173,7 +367,7 @@ main {
   position: absolute;
   right: 2px;
   bottom: 0;
-  font-size: calc(var(--cell-px) * 0.24);
+  font-size: calc(var(--cell-px) * 0.23);
   opacity: 0.7;
 }
 
@@ -216,220 +410,642 @@ main {
 .cell.is-selected.dir-v::after { bottom: 1px; left: 45%; height: 30%; width: 2px; }
 
 body.locked .cell { cursor: not-allowed; }
+body.locked .board { outline: 3px solid var(--flag); outline-offset: 3px; }
 
-.toolbar {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-
-.panels {
-  width: 330px;
-  flex: 0 0 330px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  overflow-y: auto;
-}
-
-.panel {
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  padding: 10px 12px;
-}
-
-.panel h2 {
-  margin: 0 0 6px;
-  font-size: 13px;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--muted);
-}
-
-.panel p { margin: 2px 0; }
-
-.field { display: block; margin-top: 8px; font-size: 12px; color: var(--muted); }
-.field select, .field input { width: 100%; margin-top: 2px; }
-
-.pool { display: flex; flex-wrap: wrap; gap: 2px 10px; font-family: ui-monospace, monospace; }
-.pool-letter { white-space: nowrap; letter-spacing: 1px; }
-.pool-letter b { font-family: system-ui, sans-serif; }
-.pool-letter.empty { opacity: 0.4; }
-.pool-letter.over { color: var(--fail); font-weight: 700; }
-
-.checks { list-style: none; margin: 0; padding: 0; }
-.checks li { padding: 1px 0; }
-.checks .mark { display: inline-block; width: 1.2em; font-weight: 700; }
-.checks .pass .mark { color: var(--pass); }
-.checks .fail { color: var(--fail); }
-.checks .warn { color: var(--warn); }
-.checks .info { color: var(--muted); }
-
-footer {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 12px;
-  border-top: 1px solid var(--line);
-  background: var(--panel);
-  flex-wrap: wrap;
-}
-
-.strip { display: flex; gap: 4px; overflow-x: auto; max-width: 40vw; }
-.spacer { flex: 1; }
-
-button {
-  font: inherit;
-  padding: 4px 10px;
-  border: 1px solid var(--line);
-  border-radius: 5px;
-  background: var(--bg);
-  color: var(--ink);
-  cursor: pointer;
-}
-button:hover:not(:disabled) { border-color: var(--accent); }
-button:disabled { opacity: 0.4; cursor: default; }
-button.primary { background: var(--accent); color: var(--panel); border-color: var(--accent); }
-button.on { background: var(--accent); color: var(--panel); }
-
-.chip { min-width: 2em; padding: 3px 6px; }
-.chip.current { background: var(--accent); color: var(--panel); border-color: var(--accent); }
-
-.banner {
-  padding: 8px 12px;
-  background: var(--dw);
-  color: var(--tile-ink);
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-
-.muted { color: var(--muted); }
-.fail { color: var(--fail); }
-.warn { color: var(--warn); }
-
-dialog { border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--ink); }
-dialog textarea { width: 100%; margin-top: 8px; font-family: ui-monospace, monospace; }
-dialog menu { display: flex; gap: 8px; justify-content: flex-end; padding: 0; margin: 12px 0 0; }
-
-.drop {
-  margin-top: 8px;
-  padding: 18px;
-  border: 2px dashed var(--line);
-  border-radius: 6px;
-  text-align: center;
-  color: var(--muted);
-}
-.drop.over { border-color: var(--accent); color: var(--accent); }
-
-.scan-row { display: flex; gap: 6px; flex-wrap: wrap; }
-.scan-row button { flex: 1 1 auto; }
-#scan-result.busy { color: var(--accent); }
-#scan-result.bad { color: var(--fail); }
-#api-state.up { color: var(--pass); }
-#api-state.down { color: var(--fail); }
-
-/* When a past turn is being viewed, typing does nothing. That has to be obvious:
-   a control that silently ignores you reads as broken, which is exactly how it was
-   reported. */
-#lock-note {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 3px 10px;
-  border-radius: 5px;
-  background: var(--dw);
-  color: var(--tile-ink);
-  font-weight: 600;
-}
-#lock-note[hidden] { display: none; }
-body.locked .board { outline: 3px solid var(--warn); outline-offset: 3px; }
-
-.tabs { display: flex; gap: 4px; align-self: flex-start; }
-.tab { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
-.tab.on { background: var(--accent); color: var(--panel); border-color: var(--accent); }
-
-/* The photograph occupies the same space the board does, so switching between them
-   compares like with like rather than making you hunt across the screen. */
-.photo-pane {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  max-width: calc(100vw - 380px);
-}
-.photo-pane[hidden] { display: none; }
-.photo-switch { display: flex; gap: 14px; font-size: 13px; color: var(--muted); }
-.photo-switch label { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
-#photo {
-  max-height: calc(100vh - 230px);
-  max-width: 100%;
-  object-fit: contain;
-  border: 1px solid var(--line);
-  border-radius: 4px;
-  background: var(--panel);
-}
-#photo[hidden] { display: none; }
-
-/* -- the pages around the board ------------------------------------------- */
-
-body.centred { align-items: center; justify-content: center; }
-body.dashboard { display: block; }
+/* -- the recorder ---------------------------------------------------------- */
 
 .topbar {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 10px 14px;
+  padding: 10px 16px;
   background: var(--panel);
   border-bottom: 1px solid var(--line);
+  flex-wrap: wrap;
 }
-.topbar h1 { margin: 0; font-size: 17px; }
-.back { color: var(--accent); text-decoration: none; font-weight: 600; }
+.topbar h1 { margin: 0; font-family: var(--face-display); font-size: 18px; }
+.topbar .game-title { font-size: 15px; font-weight: 600; }
+
+.back {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--accent);
+  text-decoration: none;
+  font-weight: 500;
+}
 .back:hover { text-decoration: underline; }
 
-.card {
-  width: min(360px, 92vw);
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 22px 24px;
-  text-align: left;
+.wordmark { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; color: inherit; }
+.wordmark .name { font-family: var(--face-display); font-size: 17px; font-weight: 600; }
+
+/* The mark is a tile, because that is what the program is about. */
+.tile-mark {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+  border-radius: 5px;
+  background: var(--tile);
+  border: 1px solid var(--tile-edge);
+  color: var(--tile-ink);
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1;
 }
-.card h1 { margin: 0 0 2px; font-size: 20px; }
-.wide { width: 100%; margin-top: 14px; padding: 7px; }
-.small { font-size: 12px; }
+.tile-mark::after {
+  content: '1';
+  position: absolute;
+  right: 3px;
+  bottom: 0;
+  font-size: 8px;
+  font-weight: 400;
+  opacity: 0.75;
+}
+.tile-mark.big { width: 36px; height: 36px; border-radius: 6px; font-size: 20px; }
+.tile-mark.big::after { font-size: 9px; right: 4px; bottom: 1px; }
 
-.games { padding: 16px; max-width: 900px; margin: 0 auto; }
-.empty { padding: 28px; text-align: center; color: var(--muted); }
+/* The recorder is an app shell, not a document: the window holds it and the rail
+   scrolls inside. Without this the rail's own height - which is content, not layout -
+   pushes the page taller than the window, and the board scrolls out from under the top
+   bar the moment the rail gains a card. */
+body.app { height: 100vh; min-height: 0; overflow: hidden; }
 
-.game-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
-.game {
+main.workspace {
+  flex: 1;
+  display: flex;
+  gap: 20px;
+  padding: 16px 24px;
+  min-height: 0;
+}
+
+.board-pane {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.pane-head {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+/* What the reader made of the photograph, in a sentence, in the place the answer is
+   looked for - directly under the board it just filled in. It used to be one muted
+   line in a panel on the right, which is the least prominent thing on the page for the
+   most important output the program produces. */
+.scan-strip {
+  width: 100%;
+  max-width: calc(var(--cell-px) * 16 + 8px);
   display: flex;
   align-items: center;
   gap: 10px;
+  padding: 9px 13px;
   background: var(--panel);
   border: 1px solid var(--line);
-  border-radius: 6px;
-  padding: 10px 12px;
+  border-radius: 9px;
+  font-size: 12.5px;
 }
-.game:hover { border-color: var(--accent); }
-.game.broken { border-color: var(--fail); }
+.scan-strip .mark { flex: 0 0 auto; display: flex; width: 16px; height: 16px; }
+.scan-strip #scan-result { flex: 1; margin: 0; }
+.scan-strip.busy { border-color: var(--accent); }
+.scan-strip.bad { background: var(--fail-bg); border-color: var(--fail-line); }
+.scan-strip.bad #scan-result { color: var(--fail); }
+.scan-strip a { color: var(--accent); font-weight: 500; }
+
+/* A past turn ignores typing. That has to be obvious: a control that silently does
+   nothing reads as broken, which is exactly how it was first reported. */
+#lock-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--flag-bg);
+  border: 1px solid var(--flag-line);
+  color: var(--flag-ink);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+#lock-note[hidden] { display: none; }
+#lock-note button { min-height: 26px; padding: 2px 9px; font-size: 12px; }
+
+/* -- the rail -------------------------------------------------------------- */
+
+/* Ordered by the job rather than by the pipeline: the tiles waiting to be confirmed
+   first, the checks that would contradict them second, the turn's own fields third,
+   and the bag last because it is reference, not work. */
+.panels {
+  width: var(--rail);
+  flex: 0 0 var(--rail);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 13px 15px;
+}
+.panel.lead { border-color: var(--line-strong); }
+
+.panel-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+.panel h2 {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+}
+.panel p { margin: 2px 0; }
+.panel .field { margin-top: 8px; }
+
+.row { display: flex; gap: 8px; }
+.row > * { flex: 1 1 auto; }
+.row > .shrink { flex: 0 0 auto; }
+
+/* The new tiles as chips: coordinate then letter, doubtful ones marked with a glyph as
+   well as a colour. Reading them off the rail is faster than hunting the board for
+   which squares changed. */
+.new-tiles { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.new-tiles:empty { display: none; }
+
+.tile-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  padding: 0 9px;
+  background: color-mix(in srgb, var(--tile) 45%, var(--panel));
+  border: 1px solid var(--tile-edge);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  color: var(--ink);
+}
+.tile-chip .at { font-family: var(--face-mono); font-size: 11px; color: var(--muted); }
+.tile-chip .ch { font-size: 14px; font-weight: 600; }
+.tile-chip .ch.unknown { opacity: 0.6; }
+.tile-chip.doubt { background: var(--flag-bg); border-color: var(--flag-line); }
+.tile-chip.doubt::after { content: '?'; font-size: 12px; font-weight: 700; color: var(--flag-ink); }
+.tile-chip.blank .ch { font-style: italic; }
+.tile-chip:hover { border-color: var(--accent); }
+
+.older-label {
+  margin: 14px 0 0 !important;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--flag-ink);
+}
+.older-label[hidden] { display: none; }
+
+.confirm-hint { margin-top: 11px !important; font-size: 12.5px; line-height: 1.5; color: var(--muted); }
+.confirm-hint b { color: var(--ink); font-weight: 600; }
+.confirm-row { margin-top: 12px; display: flex; gap: 8px; }
+.confirm-row .primary { flex: 1; min-height: 40px; }
+.confirm-row button { min-height: 40px; }
+
+.checks { list-style: none; margin: 8px 0 0; padding: 0; }
+.checks li { display: flex; align-items: center; gap: 9px; padding: 3px 0; font-size: 13px; }
+.checks .mark { flex: 0 0 auto; width: 14px; font-weight: 700; text-align: center; }
+.checks .what { flex: 1; }
+.checks .detail { font-family: var(--face-mono); font-size: 11px; color: var(--muted); }
+.checks .pass .mark { color: var(--pass); }
+.checks .fail { color: var(--fail); }
+.checks .fail .mark { color: var(--fail); }
+.checks .warn { color: var(--warn); }
+.checks .warn .mark { color: var(--warn); }
+.checks .info { color: var(--muted); }
+
+.pool { display: flex; flex-wrap: wrap; gap: 4px 11px; margin-top: 9px; font-family: var(--face-mono); }
+.pool-letter { white-space: nowrap; letter-spacing: 1px; font-size: 12px; }
+.pool-letter b { font-family: var(--face); }
+.pool-letter.empty { opacity: 0.4; }
+.pool-letter.over { color: var(--fail); font-weight: 700; }
+#pool-errors { margin-top: 8px; font-size: 12px; }
+
+/* -- the ribbon ------------------------------------------------------------ */
+
+/* Eleven buttons in a row became four moves: step back, step forward, more, scan.
+   Import, export, undo, redo, delete-last and the sample game are all still here, in
+   the More sheet, where they do not compete with the one control pressed every turn. */
+footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 24px;
+  border-top: 1px solid var(--line);
+  background: var(--panel);
+}
+
+.strip {
+  flex: 1;
+  display: flex;
+  gap: 6px;
+  padding: 3px 8px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.chip {
+  position: relative;
+  min-width: 32px;
+  min-height: 32px;
+  padding: 3px 7px;
+  font-size: 12px;
+  flex: 0 0 auto;
+}
+.chip.current { background: var(--accent); color: var(--on-accent); border-color: var(--accent); font-weight: 600; }
+/* A turn still holding tiles nobody has confirmed carries a mark, so the strip says
+   where the work is without opening every turn. */
+.chip.doubt::after {
+  content: '';
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--flag);
+  border: 1.5px solid var(--panel);
+}
+
+footer .primary { min-height: 42px; padding: 0 18px; display: inline-flex; align-items: center; gap: 9px; }
+footer .primary svg { width: 16px; height: 16px; }
+.divider { width: 1px; height: 26px; background: var(--line); flex: 0 0 auto; }
+
+/* -- the photograph -------------------------------------------------------- */
+
+/* It occupies the same space the board does, so switching between them compares like
+   with like rather than making you hunt across the screen. */
+.photo-pane {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  max-width: calc(100vw - var(--rail) - var(--chrome-h));
+}
+.photo-pane[hidden] { display: none; }
+.photo-switch { display: flex; gap: 16px; font-size: 13px; color: var(--muted); }
+.photo-switch label { display: inline-flex; align-items: center; gap: 5px; cursor: pointer; }
+#photo {
+  max-height: calc(100vh - var(--chrome-v) + 60px);
+  max-width: 100%;
+  object-fit: contain;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel);
+}
+#photo[hidden] { display: none; }
+
+/* -- dialogs --------------------------------------------------------------- */
+
+dialog {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+  color: var(--ink);
+  padding: 20px 22px;
+  max-width: min(520px, 92vw);
+}
+dialog::backdrop { background: rgb(20 20 19 / 42%); }
+dialog h2 { margin: 0 0 4px; font-family: var(--face-display); font-size: 21px; }
+dialog textarea { width: 100%; margin-top: 8px; font-family: var(--face-mono); }
+dialog menu { display: flex; gap: 8px; justify-content: flex-end; padding: 0; margin: 16px 0 0; }
+
+.drop {
+  margin-top: 8px;
+  padding: 18px;
+  border: 2px dashed var(--line-strong);
+  border-radius: 8px;
+  text-align: center;
+  color: var(--muted);
+}
+.drop.over { border-color: var(--accent); color: var(--accent); }
+
+/* The More sheet: everything that used to crowd the footer, grouped by what it is
+   for, so a destructive act never sits next to a navigation one. */
+.menu-group { margin-top: 16px; }
+.menu-group:first-of-type { margin-top: 10px; }
+.menu-group h3 {
+  margin: 0 0 7px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.menu-group .row { flex-wrap: wrap; }
+.menu-group button { flex: 1 1 auto; }
+
+.keys { list-style: none; margin: 12px 0 0; padding: 0; display: grid; grid-template-columns: auto 1fr; gap: 7px 14px; align-items: baseline; }
+.keys dt, .keys .key { font-family: var(--face-mono); font-size: 12px; color: var(--ink); white-space: nowrap; }
+.keys .what { font-size: 13px; color: var(--muted); }
+
+/* -- the sign-in page ------------------------------------------------------ */
+
+body.door { display: grid; grid-template-columns: 55fr 45fr; min-height: 100vh; }
+
+/* The left half is a board under the marks the reader puts on one when it finds it.
+   It is the only picture on the page and it is the thing the program does. */
+.door-art {
+  position: relative;
+  overflow: hidden;
+  padding: 56px;
+  background: var(--deep);
+  color: #f4f3f0;
+  display: flex;
+  flex-direction: column;
+}
+.door-art .wordmark .name { color: #f4f3f0; }
+.door-art .lede {
+  margin-top: 78px;
+  position: relative;
+  z-index: 2;
+  max-width: 400px;
+}
+.door-art .lede h1 {
+  margin: 0;
+  font-family: var(--face-display);
+  font-size: clamp(30px, 3.4vw, 46px);
+  line-height: 1.12;
+  font-weight: 400;
+}
+.door-art .lede h1 em { display: block; font-style: normal; font-weight: 600; color: #9dc9ae; }
+.door-art .lede p { margin: 20px 0 0; font-size: 15px; line-height: 1.55; color: #a9b2a7; max-width: 330px; }
+
+.door-art .caption {
+  position: absolute;
+  left: 56px;
+  bottom: 48px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--face-mono);
+  font-size: 11px;
+  color: #939c92;
+}
+.door-art .caption .bracket {
+  width: 13px;
+  height: 13px;
+  border-top: 2px solid var(--flag);
+  border-left: 2px solid var(--flag);
+}
+
+/* The crop. Rotated a little because it stands for a photograph, and framed by the
+   quad the registration step reports. */
+.crop {
+  position: absolute;
+  right: -54px;
+  bottom: -62px;
+  z-index: 1;
+  padding: 18px;
+  transform: rotate(-3.5deg);
+  filter: drop-shadow(0 26px 44px rgb(0 0 0 / 45%));
+}
+.crop .corner { position: absolute; width: 34px; height: 34px; }
+.crop .corner.tl { top: 0; left: 0; border-top: 3px solid var(--flag); border-left: 3px solid var(--flag); }
+.crop .corner.tr { top: 0; right: 0; border-top: 3px solid var(--flag); border-right: 3px solid var(--flag); }
+.crop .corner.bl { bottom: 0; left: 0; border-bottom: 3px solid var(--flag); border-left: 3px solid var(--flag); }
+.crop .corner.br { bottom: 0; right: 0; border-bottom: 3px solid var(--flag); border-right: 3px solid var(--flag); }
+.crop .board { --size: 4; --cell-px: 76px; }
+
+.door-form {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 48px;
+}
+.door-form form { width: min(368px, 100%); }
+.door-form h1 { margin: 0; font-family: var(--face-display); font-size: 36px; letter-spacing: -0.015em; }
+.door-form .sub { margin: 8px 0 0; font-size: 15px; color: var(--muted); }
+.door-form .fields { margin-top: 32px; display: flex; flex-direction: column; gap: 16px; }
+.door-form .field input { min-height: 44px; }
+.door-form .wide { width: 100%; min-height: 46px; margin-top: 24px; font-size: 15px; }
+
+.server-line {
+  margin-top: 28px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.server-line .pill { flex: 1; }
+.server-line button { min-height: 30px; padding: 3px 10px; font-size: 12px; }
+.door-form .footnote { margin: 14px 0 0; font-size: 12px; line-height: 1.55; color: var(--muted); }
+
+/* A message that stops the page working says what to do about it, and shows the
+   command where a command is the answer. */
+.notice {
+  margin-top: 16px;
+  display: flex;
+  gap: 9px;
+  padding: 11px 13px;
+  border-radius: 8px;
+  background: var(--fail-bg);
+  border: 1px solid var(--fail-line);
+}
+.notice[hidden] { display: none; }
+.notice .mark { flex: 0 0 auto; width: 15px; height: 15px; margin-top: 2px; color: var(--fail); }
+.notice .title { margin: 0; font-size: 13px; font-weight: 600; color: var(--fail); }
+.notice .body { margin: 5px 0 0; font-size: 12.5px; line-height: 1.5; color: var(--muted); }
+.notice code {
+  font-family: var(--face-mono);
+  font-size: 12px;
+  color: var(--ink);
+}
+.notice pre {
+  margin: 7px 0 0;
+  padding: 8px 10px;
+  background: var(--deep);
+  border-radius: 6px;
+  overflow-x: auto;
+  font-family: var(--face-mono);
+  font-size: 11.5px;
+  color: #e8e6e2;
+}
+
+/* -- the games page -------------------------------------------------------- */
+
+body.dashboard { display: block; }
+
+.games { padding: 34px 24px 48px; max-width: 980px; margin: 0 auto; }
+
+.games-head { display: flex; align-items: flex-end; gap: 16px; flex-wrap: wrap; }
+.games-head h1 { margin: 0; font-family: var(--face-display); font-size: 34px; letter-spacing: -0.015em; }
+.games-head .count { margin: 0 0 6px; font-size: 14px; color: var(--muted); }
+.games-head .count .doubt { color: var(--flag-ink); font-weight: 500; }
+
+.group-label {
+  margin: 26px 0 10px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.game-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+
+.game {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 13px 14px;
+}
+.game:hover { border-color: var(--line-strong); }
+.game.broken { border-color: var(--fail-line); }
 
 .game-open {
   flex: 1;
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 2px 12px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
   text-decoration: none;
   color: inherit;
   min-width: 0;
 }
-.game-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.game-when { text-align: right; font-size: 12px; }
-.game-facts { grid-column: 1 / -1; font-size: 12px; }
+.game-name { font-size: 16px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.game-facts { margin-top: 3px; font-size: 13px; color: var(--muted); }
+.game.broken .game-facts { color: var(--fail); }
+.game-when { width: 118px; flex: 0 0 auto; text-align: right; font-size: 13px; }
+.game-when .exact { font-family: var(--face-mono); font-size: 11px; color: var(--muted); }
 
-button.danger { border-color: var(--line); color: var(--fail); }
-button.danger:hover:not(:disabled) { border-color: var(--fail); }
+/* How many tiles were on the board at each turn. It is the cheapest honest picture of
+   a game's shape - how long it ran, and whether it is still going. */
+.shape { width: 96px; height: 42px; flex: 0 0 auto; display: flex; align-items: flex-end; gap: 2px; }
+.shape i { flex: 1 1 auto; min-width: 2px; background: var(--tile-edge); border-radius: 1px; opacity: 0.7; }
+.shape i:last-child { background: var(--accent); opacity: 1; }
+.shape.cold i:last-child { background: var(--muted); }
+.shape.none {
+  align-items: center;
+  justify-content: center;
+  color: var(--fail);
+}
+
+.empty {
+  padding: 56px 28px;
+  text-align: center;
+  color: var(--muted);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.empty[hidden] { display: none; }
+.empty .title { margin: 18px 0 0; font-size: 16px; font-weight: 600; color: var(--ink); }
+.empty p { margin: 6px 0 0; max-width: 320px; font-size: 13px; line-height: 1.55; }
+.empty .row { margin-top: 18px; }
+
+/* The three-square stand-in for a board, used where an empty state needs a picture. */
+.mini-board {
+  display: grid;
+  grid-template-columns: repeat(3, 26px);
+  grid-auto-rows: 26px;
+  gap: 2px;
+  padding: 4px;
+  background: var(--board-bg);
+  border-radius: 4px;
+}
+.mini-board span { background: var(--cell); border: 1px solid var(--cell-line); }
+.mini-board span.star {
+  background: var(--dw);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  color: var(--premium-ink);
+}
+
+.games-foot { margin-top: 30px; font-family: var(--face-mono); font-size: 11.5px; color: var(--muted); }
+
+/* -- narrower windows ------------------------------------------------------ */
+
+/* There were no rules here at all before, which mattered because the camera is on a
+   phone: the page that takes the photograph was the one that could not be used on the
+   device taking it. */
+
+@media (max-width: 1180px) {
+  :root { --rail: 320px; --chrome-h: 60px; }
+  main.workspace { padding: 14px 16px; gap: 14px; }
+}
+
+@media (max-width: 900px) {
+  /* The rail goes under the board rather than beside it, and the board stops being
+     measured against a rail that is no longer there. */
+  :root { --rail: 0px; --chrome-h: 40px; --chrome-v: 420px; }
+  main.workspace { flex-direction: column; align-items: stretch; }
+  /* Stacked, the page is a document again and scrolls as one. */
+  body.app { height: auto; min-height: 100vh; overflow: auto; }
+  .panels { width: auto; flex: 0 0 auto; overflow: visible; }
+  .photo-pane { max-width: 100%; }
+  .board { --cell-px: min(calc((100vw - 40px) / 16), 44px); }
+}
+
+@media (max-width: 720px) {
+  body.door { grid-template-columns: 1fr; }
+  /* The picture is the first thing to go: on a phone the form is the whole page. */
+  .door-art { display: none; }
+  .door-form { padding: 32px 22px; }
+
+  /* One row, with the game's name giving up the space. Wrapping put the sign-out
+     icon on a line of its own above the board, which is a lot of screen for a control
+     nobody presses mid-game. */
+  .topbar { padding: 8px 12px; gap: 8px; }
+  /* Only the recorder's bar refuses to wrap: it has a name that can be truncated. The
+     games bar has four real controls and no spare width, so it takes a second row. */
+  body.app .topbar { flex-wrap: nowrap; }
+  .topbar .game-title {
+    font-size: 14px;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .topbar .back { flex: 0 0 auto; }
+  /* The keyboard sheet is for a keyboard. */
+  #keys { display: none; }
+  main.workspace { padding: 10px; }
+  .games { padding: 22px 14px 40px; }
+
+  /* A row is two lines on a phone: what it is, then how it stands. */
+  .game { flex-wrap: wrap; gap: 10px 12px; }
+  .game-open { flex: 1 1 100%; }
+  .shape { display: none; }
+  .game-when { width: auto; text-align: left; }
+  .game-when .exact { display: none; }
+
+  /* The ribbon keeps the two controls a phone needs and drops the rest into More. */
+  footer { padding: 8px 10px; gap: 6px; }
+  footer .hide-narrow { display: none; }
+  footer .primary { flex: 1 1 auto; justify-content: center; }
+  .strip { display: none; }
+
+  /* Touch targets. 34px is fine for a mouse and not for a thumb. */
+  button, .button { min-height: 40px; }
+  button.icon { width: 40px; }
+  .segmented button { min-height: 32px; }
+}

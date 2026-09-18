@@ -4,7 +4,7 @@
 // change, and renderers redraw. Keeping that one-directional is what lets the board
 // component drop into the operator console later without a rewrite.
 
-import { SIZE, SCHEMA_VERSION, CENTRE } from './constants.js';
+import { SIZE, SCHEMA_VERSION, CENTRE, FLAG_BELOW } from './constants.js';
 
 let doc = null;
 let undone = [];            // edits taken off the log by undo, awaiting redo
@@ -141,6 +141,26 @@ export function newThisTurn() {
   return out;
 }
 
+/**
+ * Whether this tile is still waiting on a person.
+ *
+ * A null confidence means the reading did not come from the reader at all - it was
+ * typed in, or somebody confirmed it - and that is the most trustworthy state a tile
+ * has, so it is never doubtful. A tile with no letter always is, whatever its
+ * confidence says: the reader either could not name it, or it is a blank, whose
+ * designation is not in the pixels at all and never will be.
+ */
+export function doubtful(cell) {
+  if (!cell) return false;
+  if (cell.letter == null) return true;
+  return cell.confidence != null && cell.confidence < FLAG_BELOW;
+}
+
+/** How many tiles on a turn are still waiting. Drives the mark on the turn strip. */
+export function doubtfulIn(turn) {
+  return turn.cells.filter(doubtful).length;
+}
+
 // -- writing -----------------------------------------------------------------
 
 function record(entry) {
@@ -194,6 +214,51 @@ export function replaceCells(cells, why = 'scan') {
   turn.cells = cells.map(c => ({ ...c }));
   record({ action: 'replaceCells', why, before: { cells: before }, after: { cells: turn.cells.map(c => ({ ...c })) } });
   emit();
+}
+
+/**
+ * Record that a person has looked at these tiles and stands behind them.
+ *
+ * The whole argument for diffing is that a turn puts about seven new tiles on a board
+ * rather than ninety-five, so confirming a turn is a few seconds' work rather than a
+ * chore nobody does. This is that act.
+ *
+ * A confirmed tile is stored exactly as a typed one: `confidence: null`, meaning not
+ * from OCR and therefore certain. That is deliberate - a tile a person has checked is
+ * as good as one a person typed, and keeping a "confirmed but 0.62" state would mean
+ * every reader of this file had to decide what to do with it.
+ *
+ * Nothing is lost by it. The reading the tile arrived with is in the edit log's
+ * `before`, which is also what undo walks back, so one press restores the whole turn's
+ * original confidences.
+ *
+ * Returns how many tiles actually changed.
+ */
+export function confirmCells(positions) {
+  const turn = currentTurn();
+  const want = new Set(positions.map(p => key(p.row, p.col)));
+  const before = turn.cells.map(c => ({ ...c }));
+  let changed = 0;
+
+  turn.cells = turn.cells.map(c => {
+    // A tile already certain has nothing to confirm; saying so would only add a log
+    // entry that undoes to itself.
+    if (!want.has(key(c.row, c.col)) || c.confidence == null) return c;
+    changed++;
+    return { ...c, confidence: null, source: 'confirmed' };
+  });
+
+  if (!changed) return 0;
+  // Logged the way a scan is, as one act on the whole turn, so undo takes the
+  // confirmation back in a single press rather than seven.
+  record({
+    action: 'replaceCells',
+    why: 'confirm',
+    before: { cells: before },
+    after: { cells: turn.cells.map(c => ({ ...c })) },
+  });
+  emit();
+  return changed;
 }
 
 export function setAnnotation(annotation) {

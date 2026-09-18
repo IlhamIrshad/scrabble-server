@@ -62,10 +62,21 @@ export function render(strip, onSelect) {
   strip.innerHTML = '';
   d.turns.forEach((t, i) => {
     const chip = document.createElement('button');
-    chip.className = 'chip' + (i === d.currentTurn ? ' current' : '');
+    // A turn still holding tiles nobody has confirmed carries a mark, so the strip says
+    // where the work is left without opening every turn to find out.
+    const waiting = state.doubtfulIn(t);
+    chip.className = 'chip'
+      + (i === d.currentTurn ? ' current' : '')
+      + (waiting ? ' doubt' : '');
     chip.textContent = i + 1;
-    chip.title = (d.players[t.player] || 'Player ' + t.player) + ' · ' + t.annotation;
+    chip.title = (d.players[t.player] || 'Player ' + t.player) + ' · ' + t.annotation
+      + (waiting ? ' · ' + waiting + ' tile' + (waiting === 1 ? '' : 's') + ' still to confirm' : '');
     chip.addEventListener('click', () => onSelect(i));
     strip.appendChild(chip);
   });
+
+  // Twenty turns overflow the strip, and the chip you are on is the one that has to be
+  // visible. Nearest rather than centred, so it only scrolls when it has to.
+  const current = strip.children[d.currentTurn];
+  if (current) current.scrollIntoView({ block: 'nearest', inline: 'nearest' });
 }

@@ -38,7 +38,8 @@ do in principle, but the plain one lets the browser decide how long a file stays
 and it decides generously - an edited module keeps being served from cache and the page
 goes on running the old version, which looks exactly like a change that did not work.
 
-Press **load sample** to get a board to play with.
+Press **More** (the dots in the ribbon) and then **Load the sample game** to get a
+board to play with.
 
 ## Where games live
 
@@ -57,6 +58,13 @@ exactly like one that is saving, right up until the browser closes, so it never 
 silent.
 
 `games/` is gitignored, for the same reason `photos/` is.
+
+Each row on the games list answers one question before you open it: **is this game
+finished being checked?** Turn and tile counts say how big a game is, which is rarely
+why anyone opens one; the count of tiles still waiting on a person is why, so it is the
+only thing on the page rendered in a colour. `GET /games` computes it from the last turn
+of each game, and the bars beside the name are the tile count at each turn - the cheapest
+honest picture of a game's shape without opening it.
 
 ## What it is for
 
@@ -92,18 +100,50 @@ Click a square and type. That is the whole thing.
 | **Ctrl/Cmd + Z**, **Ctrl/Cmd + Shift + Z** | undo, redo |
 | **Home** / **End** | first turn, last turn |
 
-**new game** starts an empty document under a new name - use it before scanning a board
-from a different game, or the boards pile up as turns of the same one. **delete last**
-removes the final turn. Nothing is deleted from the middle: it would renumber every turn
-after it.
+The same table is in the page, behind **Keys** in the top bar, so it does not have to
+be remembered from here.
+
+**New game**, on the games list, starts an empty document under a new name - use it
+before scanning a board from a different game, or the boards pile up as turns of the
+same one. **Delete the last turn** is in the **More** sheet; nothing is deleted from the
+middle, because it would renumber every turn after it.
+
+The ribbon along the bottom holds four moves: step back, step forward, **More**, and
+**new turn + scan**. Import, export, undo, redo, delete-last, the sample game and the
+reader's address all live in the More sheet. They were a row of eleven buttons, which
+put `load sample` next to `export` and `delete last` next to the turn navigation - one
+slip from a game that has no second copy.
 
 Typing over a tile that is already there steps past it rather than replacing it, the
 way a crossword does. To change a tile, clear it first.
 
-Past turns are **read-only** until you press *edit this turn*. Amending history can
+Past turns are **read-only** until you press *edit it anyway*. Amending history can
 invalidate everything after it, so it is deliberately a decision rather than an
 accident. Nothing is propagated forward - if an edit makes later turns inconsistent,
 that is for you to sort out.
+
+## Confirming a turn
+
+The **New this turn** card at the top of the rail is what the whole diffing argument is
+for: per turn a person checks about seven new tiles rather than ninety-five, which is
+what makes recording a game during a timed round possible at all.
+
+It lists the squares this turn added as chips - coordinate, then letter - with the ones
+the reader is unsure of marked. Clicking a chip goes to that square on the board, because
+the correction happens there and not in the rail.
+
+**Confirm** records that a person looked. A confirmed tile is stored exactly as a typed
+one, `confidence: null`, because a tile somebody checked is as trustworthy as one
+somebody typed, and a "confirmed but 0.62" state would make every reader of the file
+decide what to do with it. Nothing is lost: the reading it arrived with is in the edit
+log, which is also what undo walks back, so one press restores the whole turn.
+
+Two things it will not pretend to fix. A tile with **no letter** - unreadable, or a blank,
+whose designation is not in the photograph at all - needs somebody to type one, so
+confirming does not count it. And tiles **carried forward** from earlier turns that were
+never confirmed are listed separately: every turn holds the whole board, so a doubtful
+reading from turn 2 is still doubtful in turn 9, and it is exactly what the games list
+counts.
 
 ## Scanning a photograph
 
@@ -113,11 +153,13 @@ The board reader runs as a small HTTP service. Start it from the repository root
 python -m uvicorn app.main:app --port 8000
 ```
 
-The **Scan** panel says whether it can see it. Then:
+Its address, and whether the page can see it, are in the **More** sheet. Then:
 
-- **new turn + scan** - the ordinary move. Copies the board forward into a new turn,
+- **new turn + scan** - the ordinary move, and the only primary button in the ribbon.
+  Copies the board forward into a new turn,
   asks for a photograph, and fills the turn in from it.
-- **rescan this turn** - read the same turn again, after moving the camera or the light.
+- **Rescan**, in the New this turn card - read the same turn again, after moving the
+  camera or the light.
 
 On a phone the file picker offers the camera directly; on a desktop it is an ordinary
 file chooser. Either way you get a still, which is all the reader wants.
@@ -176,6 +218,16 @@ Nothing about a scan is final: it fills the turn in, and then you correct it by 
 The whole point of scanning into a *new* turn is that only the handful of new tiles
 need checking, rather than the whole board.
 
+## On a phone
+
+The camera is on a phone, so the page that takes the photograph has to work on the
+device taking it. Below 900px the rail moves under the board instead of beside it;
+below 720px the turn strip and the keyboard sheet go away - neither means anything
+without a keyboard or a wide window - and every target grows to 40px. The sign-in
+page drops its picture and becomes the form.
+
+Before this there were no width rules at all: one `@media` block, for dark mode.
+
 ## What it will not do
 
 Scoring, word checking, racks, and clocks. Those are left out because the things they
@@ -206,7 +258,7 @@ is the most trustworthy one on the board.
 
 ```
 index.html      markup
-style.css       all styling; every colour is a custom property
+style.css       all styling; every colour, face and measurement is a custom property
 src/
   constants.js  premium grid, tile distribution, values, thresholds
   state.js      the document, the edit log, undo - and no DOM at all

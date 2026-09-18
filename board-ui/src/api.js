@@ -15,6 +15,20 @@ export function apiBase() {
   }
 }
 
+/**
+ * Both this module and `scan.js` read the same stored address, and both may set it.
+ * They are separate concerns - one is where games live, the other is a vision service -
+ * but today they are one server, and asking twice for the same address would be a
+ * question with no right answer.
+ */
+export function setApiBase(url) {
+  try {
+    localStorage.setItem(BASE_KEY, String(url).replace(/\/$/, ''));
+  } catch (err) {
+    /* the address just will not persist; this session still works */
+  }
+}
+
 export function token() {
   try {
     return localStorage.getItem(TOKEN_KEY) || '';

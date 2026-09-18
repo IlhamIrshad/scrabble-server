@@ -4,25 +4,57 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Virtual board</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 </head>
-<body>
-
-
+<body class="app">
 
 <header class="topbar">
-  <a href="./" class="back">&lsaquo; games</a>
-  <b id="game-name">&nbsp;</b>
-  <span id="saved-state" class="muted">&nbsp;</span>
+  <a href="./" class="back">
+    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>
+    Games
+  </a>
+  <span class="divider"></span>
+  <b id="game-name" class="game-title">&nbsp;</b>
+
+  <!-- A board that has quietly stopped saving looks exactly like one that is saving,
+       right up until the browser closes, so this never goes blank and never stays
+       silent about a failure. -->
+  <span id="saved-state" class="pill"><span class="dot"></span><span id="saved-text">&nbsp;</span></span>
+
   <span class="spacer"></span>
-  <button id="sign-out">sign out</button>
+
+  <span id="lock-note" hidden>
+    read-only: a past turn
+    <button id="unlock">Edit it anyway</button>
+  </span>
+
+  <button id="keys">Keys</button>
+  <button id="sign-out" class="icon quiet" aria-label="Sign out" title="Sign out">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+  </button>
 </header>
 
-<main>
+<main class="workspace">
   <section class="board-pane">
-    <div class="tabs" role="tablist">
-      <button id="tab-board" class="tab on" role="tab" aria-selected="true">board</button>
-      <button id="tab-photo" class="tab" role="tab" aria-selected="false">photograph</button>
+    <div class="pane-head">
+      <!-- A view switch, not an action: these used to be filled with the accent colour,
+           which is what the primary button uses, so "photograph" read as something that
+           was about to happen. -->
+      <div class="segmented" role="tablist">
+        <button id="tab-board" role="tab" aria-selected="true">Board</button>
+        <button id="tab-photo" role="tab" aria-selected="false">Photograph</button>
+      </div>
+
+      <span class="spacer"></span>
+
+      <span class="muted small">Typing runs <b id="direction">across</b></span>
+      <button id="flip" class="quiet" title="Switch between typing across and down (Tab)">⇄ turn</button>
+      <button id="blank-mode" class="quiet" aria-pressed="false" title="Place blanks (or hold Shift)">blank</button>
+      <button id="clear-cell" class="quiet" title="Clear the selected square (Delete)">⌫ clear</button>
+      <span id="cursor-label" class="muted small mono"></span>
     </div>
 
     <div id="board" class="board"></div>
@@ -35,98 +67,182 @@
       <img id="photo" alt="the photograph this turn was read from">
       <p id="photo-none" class="muted">No photograph for this turn. Scans keep theirs for
         as long as the page is open; typed-in turns never had one.</p>
-      <p id="photo-caption" class="muted"></p>
+      <p id="photo-caption" class="muted small"></p>
     </div>
 
-    <div class="toolbar">
-      <button id="flip" title="Switch between typing across and down (Tab)">&#8646; <span id="direction">across</span></button>
-      <button id="blank-mode" aria-pressed="false" title="Place blanks (or hold Shift)">blank</button>
-      <button id="clear-cell" title="Clear the selected square (Delete)">&#9003; clear</button>
-      <span id="cursor-label" class="muted"></span>
-      <span id="lock-note" hidden>
-        read-only: this is a past turn
-        <button id="unlock">edit it anyway</button>
-      </span>
+    <!-- What the reader made of the photograph, in a sentence, directly under the board
+         it just filled in. This used to be one muted line in a panel on the right: the
+         least prominent place on the page for the most important thing the program
+         produces. -->
+    <div id="scan-strip" class="scan-strip">
+      <span class="mark" id="scan-mark" aria-hidden="true"></span>
+      <p id="scan-result">Pick a photograph of the board; the reader fills the turn in.</p>
+      <a href="#" id="see-reader" hidden>See what the reader saw</a>
     </div>
   </section>
 
   <aside class="panels">
-    <section class="panel">
-      <h2>Scan <span id="api-state" class="muted">checking…</span></h2>
-      <div class="scan-row">
-        <button id="scan-new" class="primary">new turn + scan</button>
-        <button id="scan-here">rescan this turn</button>
+    <!-- Ordered by the job rather than by the pipeline. Confirming the handful of new
+         tiles is what an operator does every turn; the bag is reference and goes last. -->
+    <section class="panel lead">
+      <div class="panel-head">
+        <h2>New this turn</h2>
+        <span class="spacer"></span>
+        <span id="new-summary" class="small muted"></span>
       </div>
-      <p id="scan-result" class="muted">Pick a photograph of the board; the reader fills the turn in.</p>
-      <label class="field">
-        reader address
-        <input id="api-base" type="text" spellcheck="false">
-      </label>
+      <div id="new-tiles" class="new-tiles"></div>
+
+      <!-- Every turn carries the whole board forward, so a tile the reader was unsure
+           of in turn 2 is still unsure in turn 9. Listing only what this turn added
+           would hide it, and it is exactly what the games list counts. -->
+      <p id="older-label" class="older-label" hidden></p>
+      <div id="older-tiles" class="new-tiles"></div>
+
+      <p id="confirm-hint" class="confirm-hint"></p>
+      <div class="confirm-row">
+        <button id="confirm-turn" class="primary">Confirm</button>
+        <button id="scan-here" title="Read this same turn again, after moving the camera or the light">Rescan</button>
+      </div>
     </section>
 
     <section class="panel">
-      <h2>Turn <span id="turn-n">1</span> of <span id="turn-total">1</span></h2>
-      <p id="turn-who" class="muted"></p>
-      <p id="turn-delta" class="muted"></p>
-      <label class="field">
-        annotation
-        <select id="annotation">
-          <option value="play">play</option>
-          <option value="pass">pass</option>
-          <option value="exchange">exchange</option>
-          <option value="challenge">challenge</option>
-          <option value="unknown">unknown</option>
-        </select>
-      </label>
-      <label class="field">
-        note
-        <input id="note" type="text" placeholder="operator note">
-      </label>
-    </section>
-
-    <section class="panel">
-      <h2>Tile pool <span id="pool-left" class="muted"></span></h2>
-      <div id="pool" class="pool"></div>
-      <p id="pool-errors" class="fail" hidden></p>
-    </section>
-
-    <section class="panel">
-      <h2>Checks</h2>
+      <div class="panel-head"><h2>Checks</h2></div>
       <ul id="checks" class="checks"></ul>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h2>Turn <span id="turn-n">1</span> of <span id="turn-total">1</span></h2>
+        <span class="spacer"></span>
+        <span id="turn-who" class="small muted"></span>
+      </div>
+      <div class="row" style="margin-top: 10px;">
+        <label class="field">
+          <span>annotation</span>
+          <select id="annotation">
+            <option value="play">play</option>
+            <option value="pass">pass</option>
+            <option value="exchange">exchange</option>
+            <option value="challenge">challenge</option>
+            <option value="unknown">unknown</option>
+          </select>
+        </label>
+        <label class="field" style="flex: 2 1 auto;">
+          <span>note</span>
+          <input id="note" type="text" placeholder="operator note">
+        </label>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h2>Bag</h2>
+        <span class="spacer"></span>
+        <span id="pool-left" class="small muted mono"></span>
+      </div>
+      <div id="pool" class="pool"></div>
+      <p id="pool-errors" class="fail small" hidden></p>
     </section>
   </aside>
 </main>
 
 <footer>
-  <button id="first" title="First turn (Home)">&laquo;</button>
-  <button id="prev" title="Previous turn">&lsaquo;</button>
+  <button id="first" class="icon hide-narrow" aria-label="First turn" title="First turn (Home)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 18 12 12 18 6"/><line x1="7" y1="6" x2="7" y2="18"/></svg>
+  </button>
+  <button id="prev" class="icon" aria-label="Previous turn">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+  </button>
+
   <div id="turn-strip" class="strip"></div>
-  <button id="next" title="Next turn">&rsaquo;</button>
-  <button id="last" title="Last turn (End)">&raquo;</button>
-  <span class="spacer"></span>
-  <button id="add-turn" class="primary">+ new turn</button>
-  <button id="del-turn">delete last</button>
-  <span class="spacer"></span>
-  <button id="undo" title="Ctrl/Cmd+Z">undo</button>
-  <button id="redo" title="Ctrl/Cmd+Shift+Z">redo</button>
-  <button id="load-sample">load sample</button>
-  <button id="import">import</button>
-  <button id="export">export</button>
+
+  <button id="next" class="icon" aria-label="Next turn">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+  </button>
+  <button id="last" class="icon hide-narrow" aria-label="Last turn" title="Last turn (End)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 18 12 12 6 6"/><line x1="17" y1="6" x2="17" y2="18"/></svg>
+  </button>
+
+  <span class="divider"></span>
+
+  <button id="more" class="icon" aria-label="Import, export, undo and more">
+    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>
+  </button>
+
+  <button id="scan-new" class="primary">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+    New turn + scan
+  </button>
 </footer>
 
+<!-- Everything that used to crowd the footer, grouped by what it is for, so a
+     destructive act never sits beside a navigation one. -->
+<dialog id="more-dialog">
+  <h2>More</h2>
+  <p class="muted small">Undo and redo also answer to Ctrl/Cmd + Z.</p>
+
+  <div class="menu-group">
+    <h3>Edit</h3>
+    <div class="row">
+      <button id="undo" type="button">Undo</button>
+      <button id="redo" type="button">Redo</button>
+    </div>
+  </div>
+
+  <div class="menu-group">
+    <h3>This file</h3>
+    <div class="row">
+      <button id="export" type="button">Export</button>
+      <button id="import" type="button">Import…</button>
+      <button id="load-sample" type="button">Load the sample game</button>
+    </div>
+  </div>
+
+  <div class="menu-group">
+    <h3>The reader</h3>
+    <label class="field">
+      <span>address <span id="api-state" class="muted">checking…</span></span>
+      <input id="api-base" type="text" spellcheck="false">
+    </label>
+  </div>
+
+  <div class="menu-group">
+    <h3>Careful</h3>
+    <button id="del-turn" class="danger" type="button" style="width: 100%;">Delete the last turn…</button>
+  </div>
+
+  <menu><button id="more-close" type="button">Close</button></menu>
+</dialog>
+
+<dialog id="keys-dialog">
+  <h2>Typing a board in</h2>
+  <p class="muted small">Click the first square of a word and type it, the way a crossword works.</p>
+  <dl class="keys">
+    <dt class="key">click</dt><dd class="what">put the cursor on a square</dd>
+    <dt class="key">a–z</dt><dd class="what">place a tile and move on, stepping over tiles already down</dd>
+    <dt class="key">Shift + a–z</dt><dd class="what">place a blank designated as that letter</dd>
+    <dt class="key">Tab</dt><dd class="what">switch between typing across and down</dd>
+    <dt class="key">Backspace</dt><dd class="what">clear this square, or step back and clear that one</dd>
+    <dt class="key">Delete</dt><dd class="what">clear this square without moving</dd>
+    <dt class="key">← ↑ → ↓</dt><dd class="what">move without editing</dd>
+    <dt class="key">Escape</dt><dd class="what">deselect</dd>
+    <dt class="key">Ctrl/Cmd + Z</dt><dd class="what">undo — with Shift, redo</dd>
+    <dt class="key">Home / End</dt><dd class="what">first turn, last turn</dd>
+  </dl>
+  <menu><button id="keys-close" type="button">Close</button></menu>
+</dialog>
+
 <dialog id="import-dialog">
-  <form method="dialog">
-    <h2>Import a board</h2>
-    <p class="muted">Choose a file, drop one here, or paste the JSON.</p>
-    <input type="file" id="import-file" accept="application/json,.json">
-    <div id="drop" class="drop">drop a .json file here</div>
-    <textarea id="import-text" rows="8" placeholder="paste JSON"></textarea>
-    <p id="import-problems" class="fail" hidden></p>
-    <menu>
-      <button value="cancel">cancel</button>
-      <button id="import-go" value="default" type="button" class="primary">import</button>
-    </menu>
-  </form>
+  <h2>Import a board</h2>
+  <p class="muted small">Choose a file, drop one here, or paste the JSON.</p>
+  <input type="file" id="import-file" accept="application/json,.json">
+  <div id="drop" class="drop">drop a .json file here</div>
+  <textarea id="import-text" rows="8" placeholder="paste JSON"></textarea>
+  <p id="import-problems" class="fail small" hidden></p>
+  <menu>
+    <button id="import-cancel" type="button">Cancel</button>
+    <button id="import-go" type="button" class="primary">Import</button>
+  </menu>
 </dialog>
 
 <script type="module" src="src/app.js"></script>

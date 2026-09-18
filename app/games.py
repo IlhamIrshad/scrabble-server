@@ -136,8 +136,40 @@ def _summary(folder: Path) -> dict | None:
         "turns": len(turns),
         "tiles": len(last.get("cells", [])),
         "frames": len(list(frames.glob("*"))) if frames.is_dir() else 0,
+        # How many tiles the board held at each turn. Two numbers a list of games can
+        # draw the shape of a game from without opening any of them: how long it ran,
+        # and whether it is still climbing.
+        "shape": [len(t.get("cells") or []) for t in turns[-40:]],
+        "toConfirm": _to_confirm(last),
         "updatedAt": doc_path.stat().st_mtime,
     }
+
+
+def _to_confirm(turn: dict) -> int:
+    """Tiles on this turn that the reader is not sure of and nobody has checked.
+
+    The only number on the games list worth acting on. Turn and tile counts say how big
+    a game is; this says whether it is *finished being checked*, which is the thing that
+    decides whether to open it.
+
+    A null confidence means the reading did not come from the reader at all - it was
+    typed in, or a person confirmed it - and that is the most trustworthy state a tile
+    has, so it never counts here.
+
+    A tile with no letter counts whatever its confidence says, blank or not. An
+    unnamed tile is one the reader saw and could not read; an unnamed blank carries no
+    designation in the pixels at all and never will. Both are waiting for a person, and
+    both are invisible in a tile count.
+    """
+    count = 0
+    for cell in turn.get("cells") or []:
+        confidence = cell.get("confidence")
+        unnamed = cell.get("letter") is None
+        unsure = (isinstance(confidence, (int, float))
+                  and confidence < settings.low_conf_threshold)
+        if unnamed or unsure:
+            count += 1
+    return count
 
 
 @router.get("/games")

@@ -4,33 +4,86 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Games — Scrabble boards</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 </head>
 <body class="dashboard">
 
 <header class="topbar">
-  <h1>Games</h1>
+  <span class="wordmark">
+    <span class="tile-mark">S</span>
+    <span class="name">Scrabble boards</span>
+  </span>
+
   <span class="spacer"></span>
-  <span id="who" class="muted"></span>
-  <button id="new-game" class="primary">new game</button>
-  <button id="import">import a file</button>
-  <button id="sign-out">sign out</button>
+
+  <span id="reader-pill" class="pill"><span class="dot"></span><span id="reader-text" class="mono">checking…</span></span>
+  <button id="import">Import a file</button>
+  <button id="new-game" class="primary">New game</button>
+  <span class="divider"></span>
+  <button id="sign-out" class="icon quiet" aria-label="Sign out" title="Sign out">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+  </button>
 </header>
 
 <main class="games">
-  <p id="loading" class="muted">Loading…</p>
+  <div class="games-head">
+    <h1>Games</h1>
+    <p id="count" class="count"></p>
+  </div>
 
-  <p id="empty" class="empty" hidden>
-    No games yet. Press <b>new game</b> to start one, then scan a photograph of your
-    board into it.
-  </p>
+  <p id="loading" class="muted" style="margin-top: 24px;">Loading…</p>
 
-  <p id="trouble" class="fail" hidden></p>
+  <div id="trouble" class="notice" hidden>
+    <span class="mark" aria-hidden="true">
+      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="13"/><line x1="12" y1="16.5" x2="12.01" y2="16.5"/></svg>
+    </span>
+    <div>
+      <p id="trouble-title" class="title"></p>
+      <p id="trouble-body" class="body"></p>
+      <pre id="trouble-cmd" hidden></pre>
+    </div>
+  </div>
 
-  <ul id="list" class="game-list"></ul>
+  <div id="groups"></div>
+
+  <div id="empty" class="empty" hidden>
+    <div class="mini-board" aria-hidden="true">
+      <span></span><span></span><span></span>
+      <span></span><span class="star">★</span><span></span>
+      <span></span><span></span><span></span>
+    </div>
+    <p class="title">Nothing recorded yet.</p>
+    <p>Start a game, then photograph the board after each play. The reader fills the
+      turn in; you check the handful of new tiles.</p>
+    <div class="row">
+      <button id="empty-new" class="primary">New game</button>
+      <button id="empty-import">Import a file</button>
+    </div>
+  </div>
+
+  <p id="where" class="games-foot" hidden>games/&lt;id&gt;/game.json · one folder each, beside the photographs it was read from</p>
 </main>
 
 <input type="file" id="import-file" accept="application/json,.json" hidden>
+
+<dialog id="row-menu">
+  <h2 id="row-menu-name">Game</h2>
+  <p class="muted small" id="row-menu-where"></p>
+  <div class="menu-group">
+    <div class="row">
+      <button id="row-open" class="primary" type="button">Open</button>
+      <button id="row-download" type="button">Download a copy</button>
+    </div>
+  </div>
+  <div class="menu-group">
+    <h3>Careful</h3>
+    <button id="row-delete" class="danger" type="button" style="width: 100%;">Delete this game and its photographs…</button>
+  </div>
+  <menu><button id="row-close" type="button">Close</button></menu>
+</dialog>
 
 <script type="module" src="src/dashboard.js"></script>
 </body>
