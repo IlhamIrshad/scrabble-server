@@ -372,3 +372,64 @@ body.locked .board { outline: 3px solid var(--warn); outline-offset: 3px; }
   background: var(--panel);
 }
 #photo[hidden] { display: none; }
+
+/* -- the pages around the board ------------------------------------------- */
+
+body.centred { align-items: center; justify-content: center; }
+body.dashboard { display: block; }
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+}
+.topbar h1 { margin: 0; font-size: 17px; }
+.back { color: var(--accent); text-decoration: none; font-weight: 600; }
+.back:hover { text-decoration: underline; }
+
+.card {
+  width: min(360px, 92vw);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 22px 24px;
+  text-align: left;
+}
+.card h1 { margin: 0 0 2px; font-size: 20px; }
+.wide { width: 100%; margin-top: 14px; padding: 7px; }
+.small { font-size: 12px; }
+
+.games { padding: 16px; max-width: 900px; margin: 0 auto; }
+.empty { padding: 28px; text-align: center; color: var(--muted); }
+
+.game-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.game {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 10px 12px;
+}
+.game:hover { border-color: var(--accent); }
+.game.broken { border-color: var(--fail); }
+
+.game-open {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px 12px;
+  text-decoration: none;
+  color: inherit;
+  min-width: 0;
+}
+.game-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.game-when { text-align: right; font-size: 12px; }
+.game-facts { grid-column: 1 / -1; font-size: 12px; }
+
+button.danger { border-color: var(--line); color: var(--fail); }
+button.danger:hover:not(:disabled) { border-color: var(--fail); }

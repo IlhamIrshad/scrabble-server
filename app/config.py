@@ -12,6 +12,21 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
+    # ---- saved games ------------------------------------------------------
+    # One folder per game: the board document and the photographs it was read from.
+    games_dir: str = "games"
+
+    # Who may open the board UI. The password is deliberately empty here and set in
+    # .env, which is not tracked - a password in a source file is a password in the
+    # history of every clone of it, for ever, and this one looks like a password that
+    # is used elsewhere.
+    #
+    # It is a doorbell rather than a lock in any case. The token lives in memory, the
+    # traffic is plain HTTP, and the whole thing assumes one person on one machine.
+    # With no password set, sign-in refuses everything and says so.
+    ui_username: str = "Ilham"
+    ui_password: str = ""
+
     # ---- server ----------------------------------------------------------
     debug_dir: str = "/tmp/scrabble-debug"
     keep_debug_images: int = 50

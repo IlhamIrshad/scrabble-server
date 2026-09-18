@@ -17,8 +17,17 @@ python serve.py                   # the page, on 8200
 python -m uvicorn app.main:app --port 8000    # the reader, from the repository root
 ```
 
-Then open <http://localhost:8200>. The page works without the reader - you just have to
-type boards in instead of scanning them.
+Then open <http://localhost:8200>. You land on **Games**, the list of everything saved;
+opening one goes to the board. The reader is not optional any more - games live on the
+server, so the page needs it to sign in and to load anything.
+
+Sign-in is set in `.env` as `UI_USERNAME` and `UI_PASSWORD`, which is not tracked. With
+no password set the server refuses every attempt and the page says so, rather than
+looking like a mistyped password.
+
+**It is a doorbell, not a lock.** The token lives in the server's memory, the traffic is
+plain HTTP, and the whole thing assumes one person on one machine. Do not put it on a
+network and believe the games are protected.
 
 **It will not work if you open `index.html` directly.** The code is split into ES
 modules, and browsers refuse to load those over `file://`. If the page comes up blank,
@@ -30,6 +39,24 @@ and it decides generously - an edited module keeps being served from cache and t
 goes on running the old version, which looks exactly like a change that did not work.
 
 Press **load sample** to get a board to play with.
+
+## Where games live
+
+One folder per game under `games/`, alongside the photographs each turn was read from:
+
+```
+games/<id>/game.json
+games/<id>/frames/t003-1758240000.jpg
+```
+
+Files rather than a database, because a game *is* a document, the format was designed
+to be hand-editable, and a folder you can open beats a row you have to query. The board
+saves about half a second after you stop typing and says so in the header - **saved**,
+**saving...**, or the reason it could not. A board that has quietly stopped saving looks
+exactly like one that is saving, right up until the browser closes, so it never stays
+silent.
+
+`games/` is gitignored, for the same reason `photos/` is.
 
 ## What it is for
 

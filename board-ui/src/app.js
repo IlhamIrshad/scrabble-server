@@ -9,6 +9,7 @@ import { pool } from './pool.js';
 import { checks } from './validate.js';
 import { TILES } from './constants.js';
 import * as scan from './scan.js';
+import * as api from './api.js';
 
 const $ = id => document.getElementById(id);
 
@@ -79,25 +80,61 @@ board.build($('board'), (row, col) => editor.select(row, col));
 
 editor.init(render, turns.canEdit);
 
-// Read what was saved *before* anything is loaded, and before the autosave
-// subscription exists. Loading a document triggers a save, so reading afterwards
-// returns the blank document that has just overwritten the real one - which meant
-// every page load quietly destroyed the previous session and then offered to
-// restore the wreckage.
-const previous = io.saved();
+const gameId = new URLSearchParams(location.search).get('game');
+if (!gameId) location.replace('./');
+if (!(await api.signedIn())) location.replace('./login.html?next=' + encodeURIComponent(location.search));
 
-state.subscribe(() => { io.save(); render(); });
+/**
+ * Save on every change, but not on every keystroke.
+ *
+ * Typing a word is seven changes in two seconds and one game worth writing, so the
+ * write waits for the typing to stop. `saving` is a promise rather than a flag so that
+ * leaving the page can wait for the write in flight instead of racing it.
+ */
+let saveTimer = null;
+let saving = Promise.resolve();
 
-const fromLink = io.fromQueryString();
-if (fromLink) {
-  state.load(fromLink);
-} else {
-  state.load(state.createDocument('untitled'));
-  if (previous) {
-    $('restore').hidden = false;
-    $('restore-yes').onclick = () => { state.load(previous); $('restore').hidden = true; };
-    $('restore-no').onclick = () => { io.clearSaved(); $('restore').hidden = true; };
+function scheduleSave() {
+  clearTimeout(saveTimer);
+  setSaved('saving…');
+  saveTimer = setTimeout(() => {
+    saving = api.saveGame(gameId, state.get())
+      .then(() => setSaved('saved'))
+      .catch(err => {
+        if (err.unauthorised) { location.replace('./login.html'); return; }
+        // Never silent. A board that has stopped saving looks exactly like one that is
+        // saving, right up until the browser is closed.
+        setSaved('NOT SAVED: ' + err.message, true);
+      });
+  }, 600);
+}
+
+function setSaved(text, bad = false) {
+  const el = $('saved-state');
+  if (!el) return;
+  el.textContent = text;
+  el.className = bad ? 'fail' : 'muted';
+}
+
+addEventListener('beforeunload', e => {
+  // A beacon was tried here and removed: sendBeacon cannot carry an Authorization
+  // header, so it would have needed an unauthenticated write endpoint - a hole in the
+  // door to save six hundred milliseconds. Warning is honest and costs nothing.
+  if (saveTimer) {
+    e.preventDefault();
+    e.returnValue = '';
   }
+});
+
+state.subscribe(() => { render(); scheduleSave(); });
+
+try {
+  state.load(await api.getGame(gameId));
+  setSaved('saved');
+} catch (err) {
+  if (err.unauthorised) location.replace('./login.html');
+  state.load(state.createDocument(gameId));
+  setSaved('could not load this game: ' + err.message, true);
 }
 
 // -- render ------------------------------------------------------------------
@@ -136,6 +173,8 @@ function render() {
   renderPool();
   renderChecks();
   renderPhoto();
+  const name = $('game-name');
+  if (name) name.textContent = doc.sessionId;
 }
 
 function renderPool() {
@@ -179,19 +218,6 @@ function renderChecks() {
 
 // -- controls ----------------------------------------------------------------
 
-/**
- * Turn this turn's tiles a quarter turn.
- *
- * Not a view control - the board is always drawn straight. This corrects a *scan* that
- * came in the wrong way round, which happens on an opening photograph, where there are
- * no earlier tiles for the automatic matching to work from. It rewrites the cells, so
- * it is an edit like any other and undoes like one.
- */
-$('turn-scan').onclick = () => {
-  if (!turns.canEdit()) return;
-  const turned = scan.rotateCells(state.currentTurn().cells, 1);
-  state.replaceCells(turned, 'turned by hand');
-};
 $('flip').onclick = () => {
   editor.view.direction = editor.view.direction === 'horizontal' ? 'vertical' : 'horizontal';
   render();
@@ -217,15 +243,7 @@ $('del-turn').onclick = () => {
 $('undo').onclick = () => state.undo();
 $('redo').onclick = () => state.redo();
 $('export').onclick = () => io.download();
-
-$('new-game').onclick = () => {
-  if (state.currentTurn().cells.length &&
-      !confirm('Start a new game? The current one is lost unless you have exported it.')) return;
-  const name = prompt('Name for this game', 'game-' + new Date().toISOString().slice(0, 10));
-  if (name === null) return;
-  state.load(state.createDocument(name || 'untitled'));
-  say('new game started - scan or type the opening play');
-};
+$('sign-out').onclick = async () => { await api.logout(); location.replace('./login.html'); };
 
 $('load-sample').onclick = async () => {
   try {
@@ -286,6 +304,16 @@ async function runScan(intoNewTurn) {
   try {
     const r = await scan.scanIntoCurrentTurn(blob);
     rememberFrame(state.get().currentTurn, r);
+
+    // Keep the photograph with the game, not just in this tab. A transcript questioned
+    // weeks later can only be settled by the picture, and by then the board has been
+    // packed away. Failing to store it must not lose the reading, which is already in
+    // the turn by this point - so it is reported and moved past.
+    try {
+      await api.addFrame(gameId, state.get().currentTurn, blob);
+    } catch (err) {
+      say('read fine, but the photograph could not be stored: ' + err.message, true);
+    }
     const parts = [r.tiles + ' tiles'];
     if (r.blanks) parts.push(r.blanks + ' blank');
     if (r.unnamed) parts.push(r.unnamed + ' unreadable');

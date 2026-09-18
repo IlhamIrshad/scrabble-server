@@ -3,130 +3,35 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Virtual board</title>
+<title>Games — Scrabble boards</title>
 <link rel="stylesheet" href="style.css">
 </head>
-<body>
+<body class="dashboard">
 
-<div id="restore" class="banner" hidden>
-  A board from a previous session was found.
-  <button id="restore-yes">Restore it</button>
-  <button id="restore-no">Start fresh</button>
-</div>
+<header class="topbar">
+  <h1>Games</h1>
+  <span class="spacer"></span>
+  <span id="who" class="muted"></span>
+  <button id="new-game" class="primary">new game</button>
+  <button id="import">import a file</button>
+  <button id="sign-out">sign out</button>
+</header>
 
-<main>
-  <section class="board-pane">
-    <div class="tabs" role="tablist">
-      <button id="tab-board" class="tab on" role="tab" aria-selected="true">board</button>
-      <button id="tab-photo" class="tab" role="tab" aria-selected="false">photograph</button>
-    </div>
+<main class="games">
+  <p id="loading" class="muted">Loading…</p>
 
-    <div id="board" class="board"></div>
+  <p id="empty" class="empty" hidden>
+    No games yet. Press <b>new game</b> to start one, then scan a photograph of your
+    board into it.
+  </p>
 
-    <div id="photo-pane" class="photo-pane" hidden>
-      <div class="photo-switch">
-        <label><input type="radio" name="photo-kind" value="photo" checked> as taken</label>
-        <label><input type="radio" name="photo-kind" value="debug"> as the reader saw it</label>
-      </div>
-      <img id="photo" alt="the photograph this turn was read from">
-      <p id="photo-none" class="muted">No photograph for this turn. Scans keep theirs for
-        as long as the page is open; typed-in turns never had one.</p>
-      <p id="photo-caption" class="muted"></p>
-    </div>
+  <p id="trouble" class="fail" hidden></p>
 
-    <div class="toolbar">
-      <button id="turn-scan" title="The photograph was taken a quarter turn round: turn this turn's tiles to match">&#8635; turn scan</button>
-      <button id="flip" title="Switch between typing across and down (Tab)">&#8646; <span id="direction">across</span></button>
-      <button id="blank-mode" aria-pressed="false" title="Place blanks (or hold Shift)">blank</button>
-      <button id="clear-cell" title="Clear the selected square (Delete)">&#9003; clear</button>
-      <span id="cursor-label" class="muted"></span>
-      <span id="lock-note" hidden>
-        read-only: this is a past turn
-        <button id="unlock">edit it anyway</button>
-      </span>
-    </div>
-  </section>
-
-  <aside class="panels">
-    <section class="panel">
-      <h2>Scan <span id="api-state" class="muted">checking…</span></h2>
-      <div class="scan-row">
-        <button id="scan-new" class="primary">new turn + scan</button>
-        <button id="scan-here">rescan this turn</button>
-      </div>
-      <p id="scan-result" class="muted">Pick a photograph of the board; the reader fills the turn in.</p>
-      <label class="field">
-        reader address
-        <input id="api-base" type="text" spellcheck="false">
-      </label>
-    </section>
-
-    <section class="panel">
-      <h2>Turn <span id="turn-n">1</span> of <span id="turn-total">1</span></h2>
-      <p id="turn-who" class="muted"></p>
-      <p id="turn-delta" class="muted"></p>
-      <label class="field">
-        annotation
-        <select id="annotation">
-          <option value="play">play</option>
-          <option value="pass">pass</option>
-          <option value="exchange">exchange</option>
-          <option value="challenge">challenge</option>
-          <option value="unknown">unknown</option>
-        </select>
-      </label>
-      <label class="field">
-        note
-        <input id="note" type="text" placeholder="operator note">
-      </label>
-    </section>
-
-    <section class="panel">
-      <h2>Tile pool <span id="pool-left" class="muted"></span></h2>
-      <div id="pool" class="pool"></div>
-      <p id="pool-errors" class="fail" hidden></p>
-    </section>
-
-    <section class="panel">
-      <h2>Checks</h2>
-      <ul id="checks" class="checks"></ul>
-    </section>
-  </aside>
+  <ul id="list" class="game-list"></ul>
 </main>
 
-<footer>
-  <button id="first" title="First turn (Home)">&laquo;</button>
-  <button id="prev" title="Previous turn">&lsaquo;</button>
-  <div id="turn-strip" class="strip"></div>
-  <button id="next" title="Next turn">&rsaquo;</button>
-  <button id="last" title="Last turn (End)">&raquo;</button>
-  <span class="spacer"></span>
-  <button id="add-turn" class="primary">+ new turn</button>
-  <button id="del-turn">delete last</button>
-  <span class="spacer"></span>
-  <button id="undo" title="Ctrl/Cmd+Z">undo</button>
-  <button id="redo" title="Ctrl/Cmd+Shift+Z">redo</button>
-  <button id="new-game">new game</button>
-  <button id="load-sample">load sample</button>
-  <button id="import">import</button>
-  <button id="export">export</button>
-</footer>
+<input type="file" id="import-file" accept="application/json,.json" hidden>
 
-<dialog id="import-dialog">
-  <form method="dialog">
-    <h2>Import a board</h2>
-    <p class="muted">Choose a file, drop one here, or paste the JSON.</p>
-    <input type="file" id="import-file" accept="application/json,.json">
-    <div id="drop" class="drop">drop a .json file here</div>
-    <textarea id="import-text" rows="8" placeholder="paste JSON"></textarea>
-    <p id="import-problems" class="fail" hidden></p>
-    <menu>
-      <button value="cancel">cancel</button>
-      <button id="import-go" value="default" type="button" class="primary">import</button>
-    </menu>
-  </form>
-</dialog>
-
-<script type="module" src="src/app.js"></script>
+<script type="module" src="src/dashboard.js"></script>
 </body>
 </html>

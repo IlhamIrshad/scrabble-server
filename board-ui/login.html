@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sign in — Scrabble boards</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body class="centred">
+
+<form id="form" class="card" autocomplete="on">
+  <h1>Scrabble boards</h1>
+  <p class="muted">Sign in to open your saved games.</p>
+
+  <label class="field">
+    username
+    <input id="username" name="username" autocomplete="username" autofocus required>
+  </label>
+
+  <label class="field">
+    password
+    <input id="password" name="password" type="password" autocomplete="current-password" required>
+  </label>
+
+  <button id="go" class="primary wide" type="submit">sign in</button>
+
+  <p id="message" class="fail" hidden></p>
+  <p id="server" class="muted small"></p>
+</form>
+
+<script type="module">
+import * as api from './src/api.js';
+
+const $ = id => document.getElementById(id);
+
+function say(text, bad = true) {
+  $('message').hidden = !text;
+  $('message').textContent = text;
+  $('message').className = bad ? 'fail' : 'muted';
+}
+
+// If a password was never set the server refuses every attempt, and without saying so
+// that is indistinguishable from getting the password wrong - so it is said here,
+// before anybody starts doubting what they typed.
+api.passwordConfigured().then(info => {
+  $('server').textContent = 'reader at ' + api.apiBase();
+  if (!info.configured) {
+    say('No password is set on the server. Put UI_PASSWORD in .env and restart it.');
+    $('go').disabled = true;
+  } else if (info.username) {
+    $('username').value = info.username;
+    $('password').focus();
+  }
+}).catch(() => {
+  $('server').textContent = 'cannot reach the server at ' + api.apiBase();
+  say('The server is not running. Start it with: python -m uvicorn app.main:app --port 8000');
+  $('go').disabled = true;
+});
+
+// Already signed in? Go straight through rather than asking again.
+api.signedIn().then(ok => { if (ok) location.replace('./'); });
+
+$('form').addEventListener('submit', async e => {
+  e.preventDefault();
+  say('');
+  $('go').disabled = true;
+  try {
+    await api.login($('username').value, $('password').value);
+    location.replace('./');
+  } catch (err) {
+    say(err.message);
+    $('password').value = '';
+    $('password').focus();
+  } finally {
+    $('go').disabled = false;
+  }
+});
+</script>
+</body>
+</html>

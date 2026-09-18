@@ -15,6 +15,10 @@ venv/
 # to need no image fixtures - tests that use these skip when the folder is absent.
 /photos/
 /photos_excluded/
+/photos_myboard/
+
+# Saved games and the photographs they were read from: real games, real people.
+/games/
 /fixtures/
 board-ui/.testphotos/
 

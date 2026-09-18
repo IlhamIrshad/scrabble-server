@@ -21,6 +21,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from starlette.websockets import WebSocketDisconnect
 
 from .config import settings
+from .games import router as games_router
 from .schemas import DetectResponse, ErrorResponse
 from .vision import classify, pipeline, registration
 
@@ -83,6 +84,9 @@ def _run(data: bytes, corners: np.ndarray | None, debug: bool):
             status_code=422,
             content=ErrorResponse(error=str(exc), stage="registration").model_dump(),
         )
+
+
+app.include_router(games_router)
 
 
 @app.get("/health")
