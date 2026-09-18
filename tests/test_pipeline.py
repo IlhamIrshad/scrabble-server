@@ -232,6 +232,62 @@ def test_grid_locks_onto_the_printed_grid(tilt, seed):
     assert grid_alignment(board) > 3.0, (info, grid_alignment(board))
 
 
+@pytest.mark.parametrize("tilt,seed", [(0, 1), (15, 2), (28, 3)])
+def test_boundary_lines_alone_find_the_board(tilt, seed):
+    """The line detector must find the board without help from any region mask.
+
+    It exists for the photographs where no colour or texture blob outlines the board
+    correctly, so it is worth knowing it stands on its own. Judged against the true
+    playable corners the generator returns, not against another detector.
+
+    Tolerant on distance - a whole cell - because these quads bound the printed
+    border rather than the playable area, and closing that gap is the snapping and
+    grid-lock stages' job, not this one's. What is being tested is that the four
+    lines found are the board's, not a table's.
+    """
+    photo, _, truth = make_board_with_corners(tilt, seed)
+    quads = registration._line_quads(photo, settings.line_quad_limit)
+    assert quads, f"no quad from boundary lines at tilt={tilt} seed={seed}"
+
+    step = np.linalg.norm(truth[1] - truth[0]) / 15.0
+    best = min(np.abs(registration.order_corners(q) - truth).max() for q in quads)
+    assert best <= step, f"nearest line quad is {best / step:.2f} cells out"
+
+
+@pytest.mark.parametrize("dx,dy", [(1, 0), (-1, 0), (0, 1), (0, -1)])
+def test_a_board_a_whole_cell_out_is_put_back(dx, dy):
+    """Handed a board shifted by one cell, the pipeline must find the right one.
+
+    The failure being guarded against is the only one that hides. A shifted lattice
+    fits as well as the true one, reads a full complement of tiles and clears every
+    geometric check, so what comes back is a complete and confident transcript of
+    the wrong cells. The printed premium squares are the one board feature that does
+    not repeat, and so the only thing that can tell the difference.
+
+    Started from the true corners rather than the detector's, so that the shift is
+    exactly one cell and the test is about recovering from it rather than about
+    which quad some detector happened to propose.
+
+    What is asserted is the transcript, not the direction taken to reach it. Without
+    the correction these inputs agree with the printed layout at 0.08 and misread
+    the whole board, so the property is real; but warping re-fits the cell comb, and
+    a quad perturbed by about a cell can be pulled back from more than one
+    direction, so which probe is adopted is not meaningful.
+    """
+    photo, truth, corners = make_board_with_corners(8, 1)
+    result = pipeline.detect(photo, registration.shift_quad(corners, dx, dy))
+
+    # The same single allowance as `test_letters_are_read_correctly`, and for the same
+    # reason: these boards are drawn with a font, in which a 'Q' is an 'O' plus two
+    # pixels. That is a property of the reference shape, not of shift recovery, and it
+    # leaves this assertion just as strong - a board still a cell out misreads most of
+    # its letters, not one of them.
+    wrong = misread_letters(truth, result)
+    assert len(wrong) <= 1, (
+        f"shifted by ({dx},{dy}), read {result.registration.method}, wrong: {wrong}"
+    )
+
+
 def test_registration_fails_loudly_on_a_blank_image():
     with pytest.raises(registration.RegistrationError):
         pipeline.detect(np.full((600, 600, 3), 128, np.uint8))
@@ -272,3 +328,20 @@ def test_generator_script_runs(tmp_path):
     truth = json.loads((tmp_path / "board.json").read_text())
     assert len(truth["board"]) == 15
     assert cv2.imread(str(tmp_path / "board.jpg")) is not None
+
+
+def test_square_names_are_column_letter_then_row_number():
+    """A1 is the top-left corner and O15 the bottom-right, as on a printed board.
+
+    Worth a test of its own because the wrong convention is almost invisible: rows and
+    columns transposed agree on the centre square, H8, and disagree everywhere else.
+    A game record written with them swapped is wrong in every coordinate while looking
+    entirely plausible.
+    """
+    from app.schemas import CellResult
+
+    assert CellResult(row=7, col=7).coord == "H8"      # the centre, symmetric
+    assert CellResult(row=0, col=0).coord == "A1"      # top-left
+    assert CellResult(row=14, col=14).coord == "O15"   # bottom-right
+    assert CellResult(row=0, col=14).coord == "O1"     # top-right, not A15
+    assert CellResult(row=7, col=3).coord == "D8"      # row 8, column D

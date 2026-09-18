@@ -38,6 +38,27 @@ def error_in_cells(got: np.ndarray, want: np.ndarray, cell_px: float) -> float:
     return float(np.linalg.norm(a - b, axis=1).max() / max(cell_px, 1e-6))
 
 
+def grid_error_in_cells(
+    image: np.ndarray, got: np.ndarray, want: np.ndarray, cell_px: float
+) -> float:
+    """Largest displacement between the two registrations' cell centres, in cells.
+
+    The figure to judge a change on. Corner displacement measures the quads that go
+    *in*, and the grid lock then re-fits pitch and phase, so it can absorb a large
+    corner difference or manufacture one: among the boards where two confirmed
+    answers disagree, one pair 1.67 cells apart at the corners lands 0.15 apart cell
+    for cell, and another 0.37 apart lands 1.66 apart. Cell centres are what decide
+    which letter is recorded where, so they are what gets scored.
+
+    Both registrations are put through the *current* code, so this asks whether today
+    it puts the cells where the confirmed answer put them - not whether it reproduces
+    a quad that some earlier version happened to propose.
+    """
+    a = registration.cell_centres(image, got)
+    b = registration.cell_centres(image, want)
+    return float(np.linalg.norm(a - b, axis=1).max() / max(cell_px, 1e-6))
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--truth", default=TRUTH)
@@ -64,21 +85,26 @@ def main() -> None:
             failed.append(name)
             continue
         got = np.array(result.registration.corners, np.float32)
-        errors.append((error_in_cells(got, want, truth[name]["cell_px"]),
+        cell_px = truth[name]["cell_px"]
+        errors.append((grid_error_in_cells(image, got, want, cell_px),
+                       error_in_cells(got, want, cell_px),
                        name, result.registration.method))
 
     if not errors:
         raise SystemExit("nothing scored")
-    arr = np.array([e for e, _, _ in errors])
+    grids = np.array([g for g, _, _, _ in errors])
+    quads = np.array([c for _, c, _, _ in errors])
     print(f"registration failed outright on {len(failed)}")
-    print(f"corner error in cells:  median {np.median(arr):.3f}   "
-          f"90th {np.quantile(arr, 0.9):.3f}   worst {arr.max():.3f}")
+    for label, arr in (("cell centres", grids), ("quad corners", quads)):
+        print(f"{label:14s}  median {np.median(arr):.3f}   "
+              f"90th {np.quantile(arr, 0.9):.3f}   worst {arr.max():.3f}")
+    print("\nby how far the cells moved - the figure that decides the transcript:")
     for limit in (0.15, 0.33, 0.5, 1.0):
-        print(f"  within {limit:4.2f} of a cell: {int((arr <= limit).sum()):3d}/{len(arr)}")
+        print(f"  within {limit:4.2f} of a cell: {int((grids <= limit).sum()):3d}/{len(grids)}")
 
     print(f"\nworst {args.worst}:")
-    for err, name, method in sorted(errors, reverse=True)[: args.worst]:
-        print(f"  {err:6.2f} cells  {name[:38]:40s} {method}")
+    for g, c, name, method in sorted(errors, reverse=True)[: args.worst]:
+        print(f"  cells {g:6.2f}  corners {c:6.2f}   {name[:32]:34s} {method}")
 
 
 if __name__ == "__main__":

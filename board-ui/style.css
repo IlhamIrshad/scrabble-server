@@ -1,0 +1,374 @@
+/* Every colour is a custom property defined here and nowhere else, so the whole
+   thing can be re-themed from one block. */
+
+:root {
+  --bg: #f4f3f0;
+  --panel: #ffffff;
+  --ink: #1b1b1a;
+  --muted: #6d6b66;
+  --line: #d6d3cd;
+
+  --board-bg: #cfd8cd;
+  --cell: #e9eae4;
+  --cell-line: #c3c6bd;
+
+  --tw: #e2857c;
+  --dw: #f0b7b2;
+  --tl: #7fa9cd;
+  --dl: #b9d4e6;
+  --premium-ink: #43413d;
+
+  --tile: #f0e2bd;
+  --tile-edge: #c4ae7d;
+  --tile-ink: #26241f;
+  --tile-new: #ffe9a8;
+  --tile-new-edge: #d8a63c;
+
+  --flag: #c8641f;
+  --manual: #4a7fb5;
+  --pass: #3c7d4a;
+  --fail: #b8362c;
+  --warn: #b1791b;
+  --accent: #2f6f4f;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #17181a;
+    --panel: #1f2124;
+    --ink: #e8e6e2;
+    --muted: #9a978f;
+    --line: #34373b;
+
+    --board-bg: #2b332c;
+    --cell: #262a27;
+    --cell-line: #3a403a;
+
+    --tw: #8e4038;
+    --dw: #6d4340;
+    --tl: #3a5f80;
+    --dl: #2f4a5c;
+    --premium-ink: #cfcdc7;
+
+    --tile: #d8c79c;
+    --tile-edge: #8f7c4c;
+    --tile-ink: #201e1a;
+    --tile-new: #f2d98a;
+    --tile-new-edge: #b8912f;
+
+    --flag: #e2884a;
+    --manual: #7fb0e0;
+    --pass: #64b07a;
+    --fail: #e0685c;
+    --warn: #d9a949;
+    --accent: #58a37c;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 14px/1.4 system-ui, -apple-system, Segoe UI, sans-serif;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+main {
+  flex: 1;
+  display: flex;
+  gap: 16px;
+  padding: 12px;
+  min-height: 0;
+}
+
+.board-pane {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+/* The board sizes itself from the space available and stays square. One custom
+   property drives the whole grid. */
+.board {
+  --size: 15;
+  --cell-px: min(calc((100vh - 190px) / (var(--size) + 1)), calc((100vw - 420px) / (var(--size) + 1)));
+  display: grid;
+  grid-template-columns: repeat(calc(var(--size) + 1), var(--cell-px));
+  grid-auto-rows: var(--cell-px);
+  background: var(--board-bg);
+  padding: 4px;
+  border-radius: 6px;
+  user-select: none;
+}
+
+.gutter {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  font-size: calc(var(--cell-px) * 0.34);
+}
+
+.cell {
+  position: relative;
+  background: var(--cell);
+  border: 1px solid var(--cell-line);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.premium-label {
+  font-size: calc(var(--cell-px) * 0.26);
+  font-weight: 600;
+  color: var(--premium-ink);
+  opacity: 0.75;
+}
+
+.cell.p-TW { background: var(--tw); }
+.cell.p-DW { background: var(--dw); }
+.cell.p-TL { background: var(--tl); }
+.cell.p-DL { background: var(--dl); }
+
+.cell.tile {
+  background: var(--tile);
+  border-color: var(--tile-edge);
+  color: var(--tile-ink);
+}
+
+.cell.is-new {
+  background: var(--tile-new);
+  border-color: var(--tile-new-edge);
+  border-width: 2px;
+}
+
+.letter {
+  font-size: calc(var(--cell-px) * 0.55);
+  font-weight: 700;
+  line-height: 1;
+}
+
+.letter.unknown { opacity: 0.55; }
+
+/* A blank must be tellable from a real letter at a glance: it is worth two points and
+   a great deal of analysis. Outlined rather than merely tinted, so it survives bad
+   lighting and a screen seen at an angle. */
+.cell.is-blank .letter {
+  font-weight: 500;
+  font-style: italic;
+  color: transparent;
+  -webkit-text-stroke: 1px var(--tile-ink);
+}
+
+.value {
+  position: absolute;
+  right: 2px;
+  bottom: 0;
+  font-size: calc(var(--cell-px) * 0.24);
+  opacity: 0.7;
+}
+
+/* State is never carried by colour alone - a corner mark or a glyph carries it too. */
+.manual-mark {
+  position: absolute;
+  top: 0;
+  left: 0;
+  border-style: solid;
+  border-width: calc(var(--cell-px) * 0.22) calc(var(--cell-px) * 0.22) 0 0;
+  border-color: var(--manual) transparent transparent transparent;
+}
+
+.flag-mark {
+  position: absolute;
+  top: 0;
+  right: 2px;
+  font-size: calc(var(--cell-px) * 0.3);
+  font-weight: 700;
+  color: var(--flag);
+}
+
+.cell.is-flagged { box-shadow: inset 0 0 0 2px var(--flag); }
+
+.cell.is-selected {
+  outline: 3px solid var(--accent);
+  outline-offset: -3px;
+  z-index: 2;
+}
+
+/* The cursor shows which way typing will run. */
+.cell.is-selected.dir-h::after,
+.cell.is-selected.dir-v::after {
+  content: '';
+  position: absolute;
+  background: var(--accent);
+  opacity: 0.8;
+}
+.cell.is-selected.dir-h::after { right: 1px; top: 45%; width: 30%; height: 2px; }
+.cell.is-selected.dir-v::after { bottom: 1px; left: 45%; height: 30%; width: 2px; }
+
+body.locked .cell { cursor: not-allowed; }
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.panels {
+  width: 330px;
+  flex: 0 0 330px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow-y: auto;
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 10px 12px;
+}
+
+.panel h2 {
+  margin: 0 0 6px;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+.panel p { margin: 2px 0; }
+
+.field { display: block; margin-top: 8px; font-size: 12px; color: var(--muted); }
+.field select, .field input { width: 100%; margin-top: 2px; }
+
+.pool { display: flex; flex-wrap: wrap; gap: 2px 10px; font-family: ui-monospace, monospace; }
+.pool-letter { white-space: nowrap; letter-spacing: 1px; }
+.pool-letter b { font-family: system-ui, sans-serif; }
+.pool-letter.empty { opacity: 0.4; }
+.pool-letter.over { color: var(--fail); font-weight: 700; }
+
+.checks { list-style: none; margin: 0; padding: 0; }
+.checks li { padding: 1px 0; }
+.checks .mark { display: inline-block; width: 1.2em; font-weight: 700; }
+.checks .pass .mark { color: var(--pass); }
+.checks .fail { color: var(--fail); }
+.checks .warn { color: var(--warn); }
+.checks .info { color: var(--muted); }
+
+footer {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border-top: 1px solid var(--line);
+  background: var(--panel);
+  flex-wrap: wrap;
+}
+
+.strip { display: flex; gap: 4px; overflow-x: auto; max-width: 40vw; }
+.spacer { flex: 1; }
+
+button {
+  font: inherit;
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--bg);
+  color: var(--ink);
+  cursor: pointer;
+}
+button:hover:not(:disabled) { border-color: var(--accent); }
+button:disabled { opacity: 0.4; cursor: default; }
+button.primary { background: var(--accent); color: var(--panel); border-color: var(--accent); }
+button.on { background: var(--accent); color: var(--panel); }
+
+.chip { min-width: 2em; padding: 3px 6px; }
+.chip.current { background: var(--accent); color: var(--panel); border-color: var(--accent); }
+
+.banner {
+  padding: 8px 12px;
+  background: var(--dw);
+  color: var(--tile-ink);
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.muted { color: var(--muted); }
+.fail { color: var(--fail); }
+.warn { color: var(--warn); }
+
+dialog { border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--ink); }
+dialog textarea { width: 100%; margin-top: 8px; font-family: ui-monospace, monospace; }
+dialog menu { display: flex; gap: 8px; justify-content: flex-end; padding: 0; margin: 12px 0 0; }
+
+.drop {
+  margin-top: 8px;
+  padding: 18px;
+  border: 2px dashed var(--line);
+  border-radius: 6px;
+  text-align: center;
+  color: var(--muted);
+}
+.drop.over { border-color: var(--accent); color: var(--accent); }
+
+.scan-row { display: flex; gap: 6px; flex-wrap: wrap; }
+.scan-row button { flex: 1 1 auto; }
+#scan-result.busy { color: var(--accent); }
+#scan-result.bad { color: var(--fail); }
+#api-state.up { color: var(--pass); }
+#api-state.down { color: var(--fail); }
+
+/* When a past turn is being viewed, typing does nothing. That has to be obvious:
+   a control that silently ignores you reads as broken, which is exactly how it was
+   reported. */
+#lock-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 5px;
+  background: var(--dw);
+  color: var(--tile-ink);
+  font-weight: 600;
+}
+#lock-note[hidden] { display: none; }
+body.locked .board { outline: 3px solid var(--warn); outline-offset: 3px; }
+
+.tabs { display: flex; gap: 4px; align-self: flex-start; }
+.tab { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+.tab.on { background: var(--accent); color: var(--panel); border-color: var(--accent); }
+
+/* The photograph occupies the same space the board does, so switching between them
+   compares like with like rather than making you hunt across the screen. */
+.photo-pane {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  max-width: calc(100vw - 380px);
+}
+.photo-pane[hidden] { display: none; }
+.photo-switch { display: flex; gap: 14px; font-size: 13px; color: var(--muted); }
+.photo-switch label { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
+#photo {
+  max-height: calc(100vh - 230px);
+  max-width: 100%;
+  object-fit: contain;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--panel);
+}
+#photo[hidden] { display: none; }

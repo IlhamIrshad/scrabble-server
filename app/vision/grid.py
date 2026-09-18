@@ -44,20 +44,44 @@ _TRIPLE_LETTER = [(1, 5), (5, 1), (5, 5)]
 _DOUBLE_LETTER = [(0, 3), (3, 0), (2, 6), (6, 2), (6, 6), (7, 3), (3, 7)]
 
 
-def _premium_squares() -> frozenset[tuple[int, int]]:
+def _unfold(seed: list[tuple[int, int]]) -> frozenset[tuple[int, int]]:
     out: set[tuple[int, int]] = set()
-    for coords in (_TRIPLE_WORD, _DOUBLE_WORD, _TRIPLE_LETTER, _DOUBLE_LETTER):
-        for r, c in coords:
-            for rr, cc in ((r, c), (r, N - 1 - c), (N - 1 - r, c), (N - 1 - r, N - 1 - c)):
-                out.add((rr, cc))
-                out.add((cc, rr))
-                out.add((N - 1 - cc, rr))
-                out.add((cc, N - 1 - rr))
-    out.add((7, 7))                     # the centre star is a double word
+    for r, c in seed:
+        for rr, cc in ((r, c), (r, N - 1 - c), (N - 1 - r, c), (N - 1 - r, N - 1 - c)):
+            out.add((rr, cc))
+            out.add((cc, rr))
+            out.add((N - 1 - cc, rr))
+            out.add((cc, N - 1 - rr))
     return frozenset(out)
 
 
-PREMIUM = _premium_squares()
+# Kept per type rather than merged, because the types carry far more information
+# than their union does: "is this square premium?" narrows a cell to one of 61
+# positions, where "is it a triple word?" narrows it to one of eight.
+#
+# That was tried, as a way of *solving* for the board's position rather than only
+# checking it - group the visible premium squares by colour, then search jointly
+# over every assignment of colour groups to types and every offset, so the layout
+# decides which colour is which rather than the other way round. It measured well
+# in the one respect that matters for safety: on twelve correctly-registered boards
+# it reported "no shift" twelve times, never inventing a correction. But given a
+# board that really was shifted it recovered the right offset only 19 times in 48,
+# and confidence did not separate its right answers from its wrong ones - one board
+# was confidently wrong at a score of 0.74. As a veto it scored exactly the same 71
+# of 75 as the plain fraction below, at several times the cost, so it was withdrawn.
+#
+# Two ambiguities are intrinsic and would have to be dealt with first: the layout is
+# symmetric under transposition, so a row shift can look like a column shift; and
+# the double-word diagonal maps onto itself under a diagonal shift, so (1,1) is
+# genuinely hard to distinguish from no shift at all. The crude colour grouping is
+# the other limit, and the easier of the two to improve.
+PREMIUM_TYPES: dict[str, frozenset[tuple[int, int]]] = {
+    "TW": _unfold(_TRIPLE_WORD),
+    "DW": _unfold(_DOUBLE_WORD) | {(7, 7)},   # the centre star is a double word
+    "TL": _unfold(_TRIPLE_LETTER),
+    "DL": _unfold(_DOUBLE_LETTER),
+}
+PREMIUM = frozenset().union(*PREMIUM_TYPES.values())
 
 
 @dataclass
@@ -69,6 +93,9 @@ class Cell:
     # the tile's printed point value, normalised the same way, when any mark that
     # could be one was found beside the letter
     value_glyph: np.ndarray | None = None
+    # How many digit-sized marks were found beside the letter. Two means a value of
+    # 10, which in English narrows the tile to 'Q' or 'Z'.
+    value_marks: int = 0
     occupied: bool = False
     is_blank: bool = False
     mean_l: float = 0.0
@@ -153,7 +180,12 @@ def binarize(board: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     """
     lightness = cv2.cvtColor(board, cv2.COLOR_BGR2LAB)[:, :, 0]
     lightness = cv2.GaussianBlur(lightness, (3, 3), 0)
-    block = settings.thresh_block | 1        # force odd
+    # Sized as a fraction of a cell, not in pixels. Adaptive thresholding compares
+    # a pixel against a window around it, so the window has to mean the same thing
+    # relative to a letter whatever resolution the board was warped to - otherwise
+    # raising `warp_size` silently halves it and changes what counts as ink.
+    step = board.shape[0] / N
+    block = max(3, int(round(settings.thresh_block_frac * step)) | 1)
     dark = cv2.adaptiveThreshold(
         lightness, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV,
         block, settings.thresh_c,
@@ -367,6 +399,79 @@ def _assign_to_cells(cands: list[dict], step: float) -> dict[tuple[int, int], di
     return {k: v[1] for k, v in best.items()}
 
 
+def _despeckle(mask: np.ndarray, step: float) -> np.ndarray:
+    """Drop specks of ink without thinning what is left.
+
+    A morphological opening is the obvious way to do this and it costs more than it
+    removes. Opening erodes and then dilates, so anything narrower than the kernel
+    is deleted rather than restored - and at this resolution a stroke is only two or
+    three pixels wide where it thins. What it deletes is the thinnest part of a
+    stroke, which breaks the ring of an 'O' and takes the tail off a 'Q'; measured
+    over 49 photographs of one board, an 'O' arrived with its counter still enclosed
+    just 4% of the time. Once the ring is open, 'O', 'Q', 'C' and 'G' are the same
+    blob to a shape matcher, and they collapse onto 'O' - which is exactly the error
+    that dominates: 'O' over-read by 48 against the tile set while 'Q' and 'C' were
+    short by 36 and 31.
+
+    Removing whole components below an area instead leaves every stroke exactly as
+    thresholded, however thin, and still discards the specks the opening was there
+    for - which are small in area, not merely narrow.
+    """
+    if settings.glyph_despeckle == "open":
+        return cv2.morphologyEx(mask, cv2.MORPH_OPEN, np.ones((3, 3), np.uint8))
+    if settings.glyph_despeckle == "none":
+        return mask
+
+    n, labels, stats, _ = cv2.connectedComponentsWithStats(
+        (mask > 0).astype(np.uint8), connectivity=8
+    )
+    floor = max(2.0, settings.glyph_speck_frac * step * step)
+    keep = np.zeros_like(mask)
+    for i in range(1, n):
+        if stats[i, cv2.CC_STAT_AREA] >= floor:
+            keep[labels == i] = 255
+    return keep
+
+
+def counters(glyph: np.ndarray) -> int:
+    """How many enclosed holes a glyph has: 'O' and 'D' one, 'B' two, 'C' none.
+
+    Topology, which is the one thing that separates the letters overlap is worst at.
+    'O', 'Q', 'C' and 'G' differ over a small part of their outline and score almost
+    identically against each other, and measured on one board 'O' was over-read by
+    48 while 'Q' and 'C' were short by 36 and 31. Whether the outline closes is a
+    different kind of evidence entirely, and it is not a matter of degree.
+
+    Counted on a *bridged copy* rather than on the glyph itself. The threshold is
+    deliberately placed to keep strokes thin, since a fattened stroke closes the gap
+    in a 'C' and swallows the tail of a 'Q'; the price is that strokes break, and
+    without repair an 'O' arrives with its counter enclosed only 8% of the time,
+    which makes the count useless. One round of closing takes that to 94%.
+
+    The repair is confined to here because it is not free: applied to the glyph that
+    gets matched it also fattens every stroke, and measured over 49 photographs that
+    cost 0.9 points of word accuracy. A break where a stroke thins is a pixel or two
+    across and a 'C' is open by a good ten, so a small closing mends the one and
+    cannot reach the other.
+    """
+    if glyph is None or not glyph.any():
+        return 0
+    solid = (glyph > 0).astype(np.uint8)
+    if settings.glyph_bridge_rounds > 0:
+        solid = cv2.morphologyEx(solid, cv2.MORPH_CLOSE, np.ones((3, 3), np.uint8),
+                                 iterations=settings.glyph_bridge_rounds)
+    padded = cv2.copyMakeBorder(solid, 1, 1, 1, 1, cv2.BORDER_CONSTANT, value=0)
+    # Four-connectivity on the background, which is the correct dual of eight on the
+    # ink: with eight, a hole leaks out through any diagonal step in a jagged edge.
+    count, labels = cv2.connectedComponentsWithAlgorithm(
+        1 - padded, 4, cv2.CV_32S, cv2.CCL_DEFAULT
+    )[:2]
+    outside = labels[0, 0]
+    floor = settings.counter_min_area_frac * glyph.shape[0] * glyph.shape[1]
+    return sum(1 for i in range(1, count)
+               if i != outside and (labels == i).sum() >= floor)
+
+
 def _cell_glyph(
     lightness: np.ndarray, cell: Cell, size: int, step: float, ink: np.ndarray
 ) -> dict | None:
@@ -438,7 +543,7 @@ def _cell_glyph(
             cv2.THRESH_BINARY | cv2.THRESH_OTSU,
         )
         hit = sign * (patch - level / 2.55) > 0.0
-        mask = cv2.morphologyEx(hit.astype(np.uint8) * 255, cv2.MORPH_OPEN, kernel)
+        mask = _despeckle(hit.astype(np.uint8) * 255, step)
         local_centre = (centre[0] - px0, centre[1] - py0)
         for cand in _glyph_candidates(mask, step, polarity, local_centre):
             cx, cy = px0 + cand["cx"], py0 + cand["cy"]
@@ -463,7 +568,14 @@ def _cell_glyph(
 
 
 def _value_marks(cand: dict, step: float) -> np.ndarray | None:
-    """The tile's printed point value, as one mask, or None if nothing was found.
+    """The point value as (mask, how many marks), or None if nothing was found.
+
+    The count is worth as much as the mask and is far more robust. Recognising which
+    digit is printed on eight pixels is unreliable, and a misrecognised digit actively
+    misleads - offered to every letter it measured *worse* than no digit at all. But
+    counting the marks asks a question those pixels can answer: only a value of 10 is
+    two of them, and in English only 'Q' and 'Z' are worth 10.
+
 
     Everything in the cell that is not the letter and is the size of a digit,
     unioned: a value of 10 is two components, and their combined width is a good
@@ -497,7 +609,61 @@ def _value_marks(cand: dict, step: float) -> np.ndarray | None:
         keep |= (labels == i).astype(np.uint8) * 255
         found += 1
 
-    return keep if found else None
+    return (keep, found) if found else None
+
+
+def _looks_blank(
+    lab: np.ndarray, cell: Cell, size: int, tile_face: np.ndarray
+) -> bool:
+    """Is this inkless, tile-coloured cell a blank tile, or a bare premium square?
+
+    Colour decides it when colour is decisive, and texture is consulted only when it
+    is not. Both halves are needed and neither is enough alone.
+
+    Colour first, because a blank tile is the tile colour and nothing else is - except
+    that a pale premium square is closer to cream than to the green board around it,
+    so a bound loose enough to admit every real blank admits those too.
+
+    Texture second, for the band where colour is merely close. A tile is an object:
+    it stands above the board, and its edge and bevel catch the light. A premium
+    square is flat printing. Over 31 photographed boards checked cell by cell, real
+    blanks vary in lightness by 22.6 across the cell and the empty squares that fool
+    the colour test vary by 14.5.
+
+    Note the direction, which is the opposite of the test this replaced: that one
+    required a blank to be *smooth*, and a plain tile is the rougher of the two.
+
+    Texture is a second opinion rather than a requirement because it is a statement
+    about photographs of physical objects. A drawn board has no relief at all - a
+    blank varies by 4.3 there and bare board by 4.8 - so requiring it outright would
+    make blanks undetectable on any rendering, and would have quietly tied this
+    pipeline to how one camera photographs one tile set.
+    """
+    apart = delta_e(cell.face, tile_face)
+    if apart > settings.blank_face_delta_e:
+        return False
+    if apart <= settings.blank_sure_delta_e:
+        return True
+    return _cell_spread(lab, cell, size) >= settings.blank_min_spread
+
+
+def _cell_spread(lab: np.ndarray, cell: Cell, size: int) -> float:
+    """Spread of lightness over the whole cell, edges and all.
+
+    Deliberately not `Cell.roughness`, which measures the face patch with the ink
+    taken out, and which orders these two populations the *other* way round. This
+    takes in the tile's edge, bevel and whatever highlight sits on it, and that is
+    the point: a real blank tile is a physical object with a lip and a shine, where
+    an empty premium square is flat printing under the same light. Measured over 31
+    boards a person checked, real blanks spread 22.6 and empty squares fooling the
+    colour test spread 14.5.
+
+    Worth recording that the test this replaces required blanks to be *smooth*,
+    which is backwards - a plain tile is the rougher of the two, not the flatter.
+    """
+    x0, y0, x1, y1 = cell_bounds(size, cell.row, cell.col)
+    patch = lab[y0:y1, x0:x1, 0]
+    return float(patch.std()) if patch.size else 0.0
 
 
 def _face_colour(
@@ -637,53 +803,6 @@ def premium_agreement(cells: list[Cell]) -> tuple[float, int]:
     return len(detected & PREMIUM) / len(detected), len(detected)
 
 
-def _detect_blanks(
-    cells: dict[tuple[int, int], Cell],
-    tile_face: np.ndarray | None,
-    board_face: np.ndarray | None,
-) -> None:
-    """Mark smooth cells whose face matches the tile colour as blank tiles.
-
-    A blank tile face is featureless, so it has a low coefficient of variance -
-    but so does bare board, which is the whole difficulty. The separating signal
-    is colour, and now that the tile colour has been measured from the letters on
-    this very board, the test is simply which of the two measured colours the
-    cell's face is closer to. That replaces a hand-tuned saturation delta and hue
-    window which described one board and one tile set, and quietly reported half
-    a cream board's empty squares as blanks.
-
-    If the tiles and the board are too close in colour to tell apart, no blank is
-    reported and every cell says so. A wrong blank is a tile that is not there.
-
-    Note that even a perfect detection only tells you a blank is present - which
-    letter it was played as is not in the pixels at all.
-    """
-    if tile_face is None or board_face is None:
-        return
-
-    separation = delta_e(tile_face, board_face)
-    if separation < settings.blank_min_separation:
-        for c in cells.values():
-            if not c.occupied:
-                c.notes.append(
-                    f"blank detection off: tile and board faces differ by only "
-                    f"{separation:.0f} Delta-E"
-                )
-        return
-
-    for c in cells.values():
-        if c.occupied or c.roughness > settings.blank_max_roughness:
-            continue
-        if not _is_tile(c.face, tile_face, board_face):
-            continue
-        c.occupied = True
-        c.is_blank = True
-        c.notes.append(
-            f"blank: face is {delta_e(c.face, tile_face):.0f} Delta-E from the "
-            f"tile colour and {delta_e(c.face, board_face):.0f} from the board"
-        )
-
-
 def _bootstrap_ink(board: np.ndarray, step: float, size: int) -> tuple[np.ndarray, set]:
     """A first, rough pass, whose only job is to find the tile colour.
 
@@ -744,6 +863,13 @@ def extract_cells(board: np.ndarray) -> tuple[list[Cell], np.ndarray]:
         for key in lettered_keys:
             cells[key].notes.append("tile colour not established; shape tests only")
 
+    # Whether the two measured colours are far enough apart to tell a tile from bare
+    # board at all. Everything below turns on it, so it is settled once here.
+    separation = (delta_e(tile_face, board_face)
+                  if tile_face is not None and board_face is not None else None)
+    colour_decides = (separation is not None
+                      and separation >= settings.blank_min_separation)
+
     ink = np.zeros((size, size), np.uint8)
     for key, cell in cells.items():
         if not _is_tile(cell.face, tile_face, board_face):
@@ -756,17 +882,59 @@ def extract_cells(board: np.ndarray) -> tuple[list[Cell], np.ndarray]:
                     f"from the tile colour"
                 )
             continue
-        cand = _cell_glyph(lab[:, :, 0], cell, size, step, ink)
-        if cand is None:
-            continue
-        cell.bbox = cand["bbox"]
-        cell.glyph = normalize_glyph(cand["mask"])
-        if settings.use_point_value:
-            marks = _value_marks(cand, step)
-            cell.value_glyph = None if marks is None else normalize_glyph(marks)
-        cell.occupied = True
 
-    if settings.detect_blanks:
-        _detect_blanks(cells, tile_face, board_face)
+        # A cell holds a tile because of its *colour*, and holds a letter because a
+        # glyph was found on it. Those are two questions, and answering the first with
+        # the second cost 110 tiles across 43 boards a person checked: a blank Protile
+        # carries no ink whatsoever, and a thin 'I' or 'L' frequently yields no usable
+        # glyph either, so both were discarded as though the square were bare.
+        #
+        # Getting this wrong in this direction is the worst case available. A tile
+        # reported with the wrong letter is visible and one tap to fix; a tile that was
+        # never reported is invisible, and nothing downstream can tell that the board
+        # it is scoring has a hole in it.
+        cand = _cell_glyph(lab[:, :, 0], cell, size, step, ink)
+        if cand is not None:
+            cell.bbox = cand["bbox"]
+            cell.glyph = normalize_glyph(cand["mask"])
+            # Always counted, because the count is cheap and useful; the digit's shape
+            # is only normalised when something asks to read it.
+            found = _value_marks(cand, step)
+            if found is not None:
+                marks, cell.value_marks = found
+                if settings.use_point_value:
+                    cell.value_glyph = normalize_glyph(marks)
+            cell.occupied = True
+        elif (settings.detect_blanks and colour_decides
+                and _looks_blank(lab, cell, size, tile_face)):
+            # Tile colour and no ink on it. For a set whose blanks are truly plain -
+            # Protiles carry no marking at all - that is exactly what a blank is.
+            #
+            # Held to a stricter colour match than a lettered tile, because there is no
+            # glyph here to corroborate anything and the whole claim rests on the
+            # colour. Measured over the boards a person checked, real tiles sit 3.2
+            # Delta-E from the measured tile colour and empty squares that fooled the
+            # looser test sit at 13.1 - mostly pale premium squares, which are nearer
+            # cream than they are to the green board around them.
+            #
+            # Smoothness used to be required instead and was the wrong test twice over:
+            # a plain tile still has a bevel, a moulding and highlights, so 44 real
+            # blanks failed a roughness bar their colour had already settled - and
+            # roughness barely separates the two populations anyway, at 5.7 against 9.4.
+            cell.occupied = True
+            cell.is_blank = True
+            cell.notes.append(
+                f"blank: tile colour, no ink; face is "
+                f"{delta_e(cell.face, tile_face):.0f} Delta-E from the tile colour "
+                f"and {delta_e(cell.face, board_face):.0f} from the board"
+            )
+
+    if settings.detect_blanks and not colour_decides:
+        note = (f"blank detection off: tile and board faces differ by only "
+                f"{separation:.0f} Delta-E" if separation is not None
+                else "blank detection off: tile or board colour not established")
+        for cell in cells.values():
+            if not cell.occupied:
+                cell.notes.append(note)
 
     return [cells[(r, c)] for r in range(N) for c in range(N)], ink

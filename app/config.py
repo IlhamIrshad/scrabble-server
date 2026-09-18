@@ -22,8 +22,15 @@ class Settings(BaseSettings):
     # runs on the small image; the warp runs on the full-resolution original.
     detect_max_edge: int = 1000
 
-    # Output size of the rectified board, in pixels. 720 => 48 px per cell.
-    warp_size: int = 720
+    # Output size of the rectified board, in pixels. 1080 => 72 px per cell.
+    #
+    # Raised from 720 once real photographs arrived: they are about 145 px per cell
+    # at the source, so warping to 48 discarded two thirds of the detail that had
+    # been captured. Measured over 60 of them, words read correctly went from 79.4%
+    # to 86.5% for 19% more time, and impossible letter counts fell from 55 boards
+    # to 48. Going on to 96 px per cell gained 0.4 of a point for another 14% - so
+    # this is where the curve flattens, not a cap.
+    warp_size: int = 1080
 
     # Size candidates are trial-warped to when being scored. Only needs to be big
     # enough to resolve grid lines, and every candidate pays for it. 360 gives 24
@@ -87,6 +94,34 @@ class Settings(BaseSettings):
     # about 1.8s each, 6 give 111 at about 2.7s. Turn it down for the WebSocket
     # path, where frames are cheap and latency is not.
     registration_candidates: int = 6
+    # Probe for a whole-cell shift when the chosen board agrees with the printed
+    # premium layout less well than this. Set between the two populations it has to
+    # separate, measured over 161 photographs a person judged: the two boards that
+    # were a cell out sat at 0.06 and 0.16, and the lowest *correctly* registered
+    # board scores 0.34.
+    #
+    # That floor of 0.34 is not about position at all. Agreement is matched partly on
+    # colour, so a board whose premium squares are not the usual red and blue - and
+    # the corpus has a red and yellow one, a grey and purple one, a white one with
+    # black tiles - scores low however perfectly it is registered. Six of the 89
+    # confirmed boards sit between 0.34 and 0.53 for that reason alone. At 0.50 this
+    # probed two of them; it is set below anything a correct board has scored, which
+    # still leaves a doubling of margin over the shifts it is meant to catch.
+    shift_probe_below: float = 0.30
+    # A shifted board is only adopted if it agrees at least this well and improves on
+    # the original by at least this much. Both, because agreeing merely less badly
+    # means the board has been nudged rather than found, and the original at least
+    # came from a detector. The two recovered boards go to 0.94 and 0.78.
+    shift_adopt_above: float = 0.50
+    shift_adopt_margin: float = 0.25
+
+    # Two candidates whose reading qualities are within this fraction of each other
+    # are treated as reading equally well, and separated on cell pitch instead. One
+    # percent, because that is comfortably below the difference a real misregistration
+    # makes - a board a whole cell out loses about 3% - and comfortably above the
+    # tenth of a percent that let a quad two cells out win on a confirmed board.
+    reading_tie_frac: float = 0.01
+
     # Candidates below this fraction of the best periodicity are not ranked
     # against it on alignment, however well they happen to align.
     grid_score_relative: float = 0.25
@@ -127,6 +162,40 @@ class Settings(BaseSettings):
     # not shifts - most likely genuinely poor quads that happen to read well. Worth
     # revisiting only with a way to tell a good keystone from a bad one.
     quad_shapes_per_contour: int = 1
+
+    # Line proposals: quads built by intersecting the board's four boundary lines
+    # instead of tracing a region's outline. A segment must be this long, relative
+    # to the frame's longest edge, to be considered a board edge at all - long
+    # enough to exclude tile and cell edges, which is what makes the two families
+    # findable, and short enough to survive an edge broken by a hand or a rack.
+    line_min_length_frac: float = 0.22
+    # How wide a break in an edge to step over, again relative to the longest edge.
+    # This one matters more than it looks. The far edge of a tilted board is the
+    # hardest of the four - foreshortened, lowest contrast, and interrupted by tiles
+    # and racks sitting against it - and at 2% it was missed entirely on a board at
+    # 28 degrees, leaving three sides and no quad. At 5% it is found.
+    line_max_gap_frac: float = 0.05
+    # Hough votes a line needs. Low, because the gate that matters is length, and
+    # requiring both is how the far edge gets lost.
+    line_votes: int = 40
+    # How far from the dominant orientation a segment may lie and still belong to
+    # its family, in degrees. Wide on purpose, and it has to be: a keystone means
+    # opposite edges are genuinely not parallel, and on a board photographed at 28
+    # degrees the two side edges sit 22 degrees apart. At 12 degrees they landed in
+    # different families and the board was rejected for having only one side.
+    # Anything above 45 would be ambiguous between the two families, so this is
+    # nearly as loose as the idea allows; clutter it lets in is dealt with by
+    # grouping and by ranking on how much of each edge was actually seen.
+    line_angle_tolerance: float = 35.0
+    # Segments within this fraction of the frame's longest edge of each other, along
+    # their shared normal, are treated as fragments of one physical edge. About a
+    # third of a cell, so the two sides of a board's printed border stay separate.
+    line_group_gap_frac: float = 0.012
+    # How many candidate edges to offer per side, outermost first. Four sides means
+    # this to the fourth power combinations, so it is deliberately small.
+    line_groups_per_side: int = 3
+    # Quads offered per photograph, best-supported first.
+    line_quad_limit: int = 3
 
     # Colour-region proposals: the frame is clustered into this many colours, once
     # per value, and the thumbnail size clustering runs at. Several values because
@@ -178,7 +247,10 @@ class Settings(BaseSettings):
     # Adaptive threshold used to isolate ink from its tile. Applied twice, once
     # per polarity, so it finds dark letters on cream tiles and light letters on
     # dark tiles without being told which to expect.
-    thresh_block: int = 25          # must be odd
+    # Window size for that threshold, as a fraction of a cell. Was 25 pixels flat,
+    # which meant the same number described half a letter at one warp size and a
+    # whole one at another; 0.52 reproduces the old 25px at the default warp.
+    thresh_block_frac: float = 0.52
     thresh_c: int = 10
 
     # A glyph contour's bounding box, as a fraction of one cell's side.
@@ -308,6 +380,7 @@ class Settings(BaseSettings):
     # anti-correlated with the true one rather than independent of it. Sitting
     # under chance means only clearly-shifted candidates are demoted.
     premium_reject_below: float = 0.20
+
     # A floor, so that a badly placed board is heavily penalised but never scored
     # at exactly zero - which would make every candidate tie.
     premium_floor: float = 0.02
@@ -335,7 +408,33 @@ class Settings(BaseSettings):
     # window is this narrow is the honest measure of how far colour and smoothness
     # can separate a blank tile from bare board - it is the weakest test in the
     # pipeline and the first thing to distrust on a board it has not seen.
-    blank_max_roughness: float = 3.1
+    # Least lightness variation, across the whole cell, that a blank tile may show.
+    # A tile is an object with an edge, a bevel and a shine on it; an empty premium
+    # square is flat printing. Over 31 boards checked cell by cell, real blanks spread
+    # 22.6 and the empty squares that pass the colour test spread 14.5. At 15 this
+    # keeps 75 of 76 real blanks and rejects 11 of 18 false ones.
+    #
+    # Note the direction. The test this replaces required a blank to be *smooth*,
+    # below a roughness of 3.1, which is backwards twice over: it measured the face
+    # with the ink removed rather than the cell, and a plain tile is the rougher of
+    # the two rather than the flatter.
+    blank_min_spread: float = 15.0
+    # Below this Delta-E from the tile colour, a blank is accepted on colour alone and
+    # texture is never consulted. It is what keeps the texture test a second opinion
+    # rather than a requirement: a drawn board has no relief, so a blank on one sits
+    # essentially at zero here and is admitted without ever being asked for a bevel it
+    # could not have.
+    blank_sure_delta_e: float = 4.0
+
+    # How close a cell's face must be to the measured tile colour, in Delta-E, before
+    # a blank tile is reported on it. Much stricter than `tile_face_delta_e`, which
+    # governs a cell that also has a glyph on it to corroborate the claim; here the
+    # colour is the entire evidence. Set from the two populations it has to separate,
+    # over 43 boards a person checked cell by cell: real tiles sit a median 3.2 away
+    # with a 90th percentile of 6.3, and the empty squares that fool a looser bound sit
+    # at 13.1 - nearly all of them pale premium squares, which really are closer to
+    # cream than to the green board around them.
+    blank_face_delta_e: float = 8.0
     # Tiles and board must differ by at least this much Delta-E before any blank
     # is reported. A cream tile on a cream board is genuinely not separable, and
     # guessing there invents tiles that are not on the board.
@@ -348,6 +447,51 @@ class Settings(BaseSettings):
     # comes down to the tilt of the photograph. Measured over the synthetic set,
     # 48 halves the error rate and 64 is not better again.
     glyph_size: int = 48
+
+    # How specks of ink are removed from a thresholded cell: "area" drops whole
+    # components below `glyph_speck_frac` of a cell, "open" uses a 3x3 morphological
+    # opening, "none" does nothing. See `grid._despeckle` for why an opening is the
+    # wrong tool - it deletes anything narrow, and the thinnest part of a stroke is
+    # narrow, so it breaks the very shapes that distinguish O, Q, C and G.
+    glyph_despeckle: str = "area"
+    # Smallest surviving speck, as a fraction of a cell's area. At 72 pixels a cell
+    # this is about 21 pixels, well under any part of a letter and well over the
+    # single-pixel noise that thresholding leaves behind.
+    glyph_speck_frac: float = 0.004
+    # Rounds of 3x3 closing used to repair pinhole breaks in a stroke *before
+    # counting its enclosed holes*, never on the glyph that gets matched. Each round
+    # bridges about a pixel, so this cannot reach the ten-pixel opening of a "C"
+    # while still mending the one- and two-pixel breaks that leave an "O" open: it
+    # takes closed "O" rings from 8% to 94%. See `grid.counters`.
+    glyph_bridge_rounds: int = 1
+    # Smallest enclosed region that counts as a counter, as a fraction of the glyph
+    # canvas. Guards against a single stray background pixel reading as a hole.
+    counter_min_area_frac: float = 0.0026
+    # Added to a letter's overlap score when its reference glyphs enclose the same
+    # number of holes as the glyph being read. Additive, like the point-value bonus,
+    # so topology can settle a near-tie between "O" and "C" without being able to
+    # talk a shapeless blob into being a letter.
+    #
+    # Deliberately small, and it has to be. Swept over 49 photographs of one board
+    # against both word accuracy and how far the letters read depart from what a tile
+    # set contains: 0.05 gives 93.2% and a departure of 47, where no bonus at all
+    # gives 92.3% and 89. Past 0.1 it inverts sharply - 0.2 gives 82.9%, because most
+    # letters enclose nothing, so a large reward for enclosing nothing lets "G"
+    # collect them wholesale and it climbs from 133 to 213 against an expected 141.
+    # It is worth exactly as much as a tiebreak and no more.
+    counter_bonus: float = 0.05
+
+    # Added to a letter's overlap score when the tile shows two digit-sized marks and
+    # that letter is worth ten. Offered only in that direction: one mark describes
+    # twenty-four letters and says next to nothing.
+    #
+    # Swept against 43 boards checked cell by cell. At 0.05 the 'O' read where a 'Q'
+    # belonged falls from 22 to 9 and total errors from 197 to 188. Larger is worse in
+    # a way worth recording: at 0.10 that confusion nearly vanishes, 22 down to 1, but
+    # 26 tiles that were not a 'Q' become one, and at 0.20 the board falls apart at 307
+    # errors. Two marks is good evidence and not decisive evidence - a broken digit or
+    # a speck beside the letter counts as two just as readily as a "10" does.
+    digit_count_bonus: float = 0.05
     glyph_pad: int = 4
     # Folder of pictures of real tiles, one per letter, named A.png ... Z.png. Used
     # in preference to a rendered font when present, because a reference glyph only
@@ -390,7 +534,23 @@ class Settings(BaseSettings):
     conf_temperature: float = 0.05
     # Cells below this confidence are listed in `low_confidence` for the
     # operator UI to resolve.
-    low_conf_threshold: float = 0.60
+    # Below this, a read is flagged for review. Raised from 0.60 after cleaning up the
+    # ink extraction: cleaner glyphs read more accurately, but they also match a wrong
+    # template *well*, and three misreads that used to be too damaged to be believed
+    # started arriving just above the old bar, at 0.62 to 0.70. Every misread the
+    # synthetic boards produce now sits under 0.75.
+    #
+    # The cost is measured and real: 16% of tiles flagged where 0.60 flagged 7.5%.
+    # Worth it in this direction only - a doubtful letter costs one tap in the operator
+    # UI, and a confident wrong one corrupts a game record nobody looks at twice.
+    #
+    # A more selective rule was tried and withdrawn. Capping confidence whenever the
+    # top two letters' *templates* overlap heavily is the more principled statement -
+    # overlap cannot separate shapes that are nearly nested - but it flagged 71% of
+    # tiles to catch the same three, because most letters' runner-up is some similar
+    # letter. Containment did not help either: glyphs are normalised to fill the
+    # canvas, so a 'Q' has a smaller ring than an 'O' and is not nested in it at all.
+    low_conf_threshold: float = 0.75
 
 
 settings = Settings()

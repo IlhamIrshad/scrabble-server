@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import os
 import time
 import uuid
@@ -81,6 +82,90 @@ def _reading_quality(cells: list[grid.Cell], bank) -> float:
     return found
 
 
+def _wins(quality: float, off_pitch: float, best: float, best_off: float) -> bool:
+    """Whether a candidate beats the best so far, on reading quality then pitch.
+
+    Reading quality decides it, except when the two are close enough that the
+    difference is noise. Measured on a photograph a person had confirmed: the right
+    quad read 173.5 and a quad two cells out read 173.7 - a tenth of a percent apart,
+    and the wrong one won. Everything else about them differed clearly, so a
+    tiebreak was all that was missing.
+
+    The tiebreak is how far the fitted cell pitch is from the one the quad implies,
+    because that answers a question reading quality structurally cannot: a lattice
+    is periodic, so a quad cropped a little way into the playable area still puts
+    whole glyphs in cells, just the wrong cells. The loser above was 7% in; the
+    winner was within a tenth of a percent.
+    """
+    if quality > best * (1.0 + settings.reading_tie_frac):
+        return True
+    if quality < best * (1.0 - settings.reading_tie_frac):
+        return False
+    return off_pitch < best_off
+
+
+def _correct_shift(
+    image: np.ndarray, reg: registration.Registration,
+    agreement: float, visible: int, bank,
+):
+    """Slide the chosen board a cell at a time, in case it settled on the wrong one.
+
+    This is the one failure that hides. A board a whole cell out fits the lattice
+    perfectly, reads a full complement of tiles, and clears every geometric check,
+    because a lattice is periodic and nothing about the shape of it says which cell
+    is which. What comes back is a complete, confident, wrong transcript - and of
+    the boards a person judged wrong, the ones that no measurement could catch were
+    exactly these.
+
+    The printed premium squares are the only cure, being the one feature of a board
+    that does not repeat. Rejecting a shifted candidate is not enough on its own:
+    the pipeline already demotes them, and on both boards this recovers, every
+    *other* candidate was worse still, so demotion left the shifted one winning
+    anyway. It has to be corrected rather than refused.
+
+    Only run when the chosen board disagrees with the printed layout, which on a
+    correct registration it does not: measured over 161 photographs, boards judged
+    correct agree at 0.62 to 0.97, and the two that were a cell out sat at 0.06 and
+    0.16. So this costs four extra reads on a handful of photographs and nothing at
+    all on the rest.
+
+    The direction recorded in the method name is the probe that was adopted, and not
+    a measurement of how far out the board was. Warping re-fits the cell comb, so a
+    quad perturbed by roughly a cell can be pulled onto the true grid from more than
+    one direction, and two probes then agree equally well. Which of them is taken
+    does not matter - both land on the same board.
+    """
+    if visible < settings.premium_min_visible or agreement >= settings.shift_probe_below:
+        return None
+
+    best = None
+    for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+        corners = registration.shift_quad(reg.corners, dx, dy)
+        try:
+            board, info = registration.warp_board(image, corners)
+        except registration.RegistrationError:
+            continue
+        cells, mask = grid.extract_cells(board)
+        moved, seen = grid.premium_agreement(cells)
+        if best is None or moved > best[0]:
+            best = (moved, seen, dx, dy, corners, board, info, cells, mask)
+
+    if best is None:
+        return None
+    moved, seen, dx, dy, corners, board, info, cells, mask = best
+    # Both bars, because a shift must be an improvement *and* an agreement. A board
+    # that merely disagrees less than before has not been located, it has been
+    # nudged, and the original at least came from a detector.
+    if moved < settings.shift_adopt_above or moved - agreement < settings.shift_adopt_margin:
+        return None
+
+    reg = dataclasses.replace(
+        reg, corners=registration.order_corners(corners),
+        method=f"{reg.method}+shift({dx},{dy})",
+    )
+    return reg, board, info, cells, mask, moved, seen
+
+
 def _best_reading(
     image: np.ndarray, options: list[registration.Registration], bank,
 ) -> tuple[registration.Registration, np.ndarray, dict, list[grid.Cell], np.ndarray]:
@@ -117,10 +202,21 @@ def _best_reading(
         shifted = (visible >= settings.premium_min_visible
                    and agreement < settings.premium_reject_below)
         combined = quality * (settings.premium_floor if shifted else 1.0)
-        if best is None or combined > best[0]:
-            best = (combined, quality, agreement, visible, reg, board, info, cells, mask)
+        # How far the fitted cell pitch is from the pitch this quad implies. Only
+        # consulted to separate candidates that read equally well, where it says
+        # which one actually bounds the playable area rather than cutting into it.
+        off_pitch = abs(info.get("period_frac", 1.0) - 1.0)
+        if best is None or _wins(combined, off_pitch, best[0], best[1]):
+            best = (combined, off_pitch, quality, agreement, visible,
+                    reg, board, info, cells, mask)
 
-    combined, quality, agreement, visible, reg, board, info, cells, mask = best
+    _, _, quality, agreement, visible, reg, board, info, cells, mask = best
+
+    corrected = _correct_shift(image, reg, agreement, visible, bank)
+    if corrected is not None:
+        reg, board, info, cells, mask, agreement, visible = corrected
+        quality = _reading_quality(cells, bank)
+
     info = {**info, "reading_quality": round(quality, 1),
             "premium_match": round(agreement, 2), "premium_visible": visible,
             "candidates_read": len(options)}
@@ -170,6 +266,18 @@ def detect(
             # confident read.
             read = classify.read_value(value_bank, cell.value_glyph)
             bonus = classify.value_bonus(bank.letters, read.letter, read.best_iou)
+
+            # Whether the letter's outline closes, which overlap alone cannot see.
+            enclosed = grid.counters(cell.glyph)
+            topology = bank.counter_bonus(enclosed)
+            bonus = topology if bonus is None else bonus + topology
+
+            # And whether its printed value has two digits, which neither overlap nor
+            # topology can see - it is the only evidence that separates Q from O.
+            digits = classify.digit_count_bonus(bank.letters, cell.value_marks)
+            if digits is not None:
+                bonus = digits if bonus is None else bonus + digits
+
             m = bank.match(cell.glyph, bonus)
 
             notes = list(cell.notes)

@@ -1,0 +1,409 @@
+{
+  "schemaVersion": 1,
+  "sessionId": "sample-game",
+  "boardLayout": "CrosswordGame",
+  "tileSet": "english",
+  "rotation": 0,
+  "players": [
+    "Player A",
+    "Player B"
+  ],
+  "turns": [
+    {
+      "index": 0,
+      "player": 0,
+      "annotation": "play",
+      "cells": [
+        {
+          "row": 7,
+          "col": 5,
+          "letter": "H",
+          "isBlank": false,
+          "confidence": 0.98,
+          "source": "ocr"
+        },
+        {
+          "row": 7,
+          "col": 6,
+          "letter": "E",
+          "isBlank": false,
+          "confidence": 0.98,
+          "source": "ocr"
+        },
+        {
+          "row": 7,
+          "col": 7,
+          "letter": "L",
+          "isBlank": false,
+          "confidence": 0.98,
+          "source": "ocr"
+        },
+        {
+          "row": 7,
+          "col": 8,
+          "letter": "L",
+          "isBlank": false,
+          "confidence": 0.98,
+          "source": "ocr"
+        },
+        {
+          "row": 7,
+          "col": 9,
+          "letter": "O",
+          "isBlank": false,
+          "confidence": 0.98,
+          "source": "ocr"
+        }
+      ],
+      "frameRef": null,
+      "capturedAt": "2026-08-20T14:30:00Z",
+      "note": "opening play, covers the centre"
+    },
+    {
+      "index": 1,
+      "player": 1,
+      "annotation": "play",
+      "cells": [
+        {
+          "row": 7,
+          "col": 5,
+          "letter": "H",
+          "isBlank": false,
+          "confidence": 0.98,
+          "source": "ocr"
+        },
+        {
+          "row": 7,
+          "col": 6,
+          "letter": "E",
+          "isBlank": false,
+          "confidence": 0.98,
+          "source": "ocr"
+        },
+        {
+          "row": 7,
+          "col": 7,
+          "letter": "L",
+          "isBlank": false,
+          "confidence": 0.98,
+          "source": "ocr"
+        },
+        {
+          "row": 7,
+          "col": 8,
+          "letter": "L",
+          "isBlank": false,
+          "confidence": 0.98,
+          "source": "ocr"
+        },
+        {
+          "row": 7,
+          "col": 9,
+          "letter": "O",
+          "isBlank": false,
+          "confidence": 0.98,
+          "source": "ocr"
+        },
+        {
+          "row": 8,
+          "col": 9,
+          "letter": "W",
+          "isBlank": false,
+          "confidence": 0.98,
+          "source": "ocr"
+        },
+        {
+          "row": 9,
+          "col": 9,
+          "letter": "N",
+          "isBlank": false,
+          "confidence": 0.98,
+          "source": "ocr"
+        }
+      ],
+      "frameRef": null,
+      "capturedAt": "2026-08-20T14:31:00Z",
+      "note": "crosses HELLO at the O"
+    },
+    {
+      "index": 2,
+      "player": 0,
+      "annotation": "pass",
+      "cells": [
+        {
+          "row": 7,
+          "col": 5,
+          "letter": "H",
+          "isBlank": false,
+          "confidence": 0.98,
+          "source": "ocr"
+        },
+        {
+          "row": 7,
+          "col": 6,
+          "letter": "E",
+          "isBlank": false,
+          "confidence": 0.98,
+          "source": "ocr"
+        },
+        {
+          "row": 7,
+          "col": 7,
+          "letter": "L",
+          "isBlank": false,
+          "confidence": 0.98,
+          "source": "ocr"
+        },
+        {
+          "row": 7,
+          "col": 8,
+          "letter": "L",
+          "isBlank": false,
+          "confidence": 0.98,
+          "source": "ocr"
+        },
+        {
+          "row": 7,
+          "col": 9,
+          "letter": "O",
+          "isBlank": false,
+          "confidence": 0.98,
+          "source": "ocr"
+        },
+        {
+          "row": 8,
+          "col": 9,
+          "letter": "W",
+          "isBlank": false,
+          "confidence": 0.98,
+          "source": "ocr"
+        },
+        {
+          "row": 9,
+          "col": 9,
+          "letter": "N",
+          "isBlank": false,
+          "confidence": 0.98,
+          "source": "ocr"
+        }
+      ],
+      "frameRef": null,
+      "capturedAt": "2026-08-20T14:32:00Z",
+      "note": "no tiles played"
+    },
+    {
+      "index": 3,
+      "player": 1,
+      "annotation": "play",
+      "cells": [
+        {
+          "row": 6,
+          "col": 5,
+          "letter": "A",
+          "isBlank": false,
+          "confidence": null,
+          "source": "manual"
+        },
+        {
+          "row": 7,
+          "col": 5,
+          "letter": "H",
+          "isBlank": false,
+          "confidence": 0.98,
+          "source": "ocr"
+        },
+        {
+          "row": 7,
+          "col": 6,
+          "letter": "E",
+          "isBlank": false,
+          "confidence": 0.98,
+          "source": "ocr"
+        },
+        {
+          "row": 7,
+          "col": 7,
+          "letter": "L",
+          "isBlank": false,
+          "confidence": 0.98,
+          "source": "ocr"
+        },
+        {
+          "row": 7,
+          "col": 8,
+          "letter": "L",
+          "isBlank": false,
+          "confidence": 0.98,
+          "source": "ocr"
+        },
+        {
+          "row": 7,
+          "col": 9,
+          "letter": "O",
+          "isBlank": false,
+          "confidence": 0.98,
+          "source": "ocr"
+        },
+        {
+          "row": 8,
+          "col": 9,
+          "letter": "W",
+          "isBlank": false,
+          "confidence": 0.98,
+          "source": "ocr"
+        },
+        {
+          "row": 9,
+          "col": 9,
+          "letter": "N",
+          "isBlank": false,
+          "confidence": 0.98,
+          "source": "ocr"
+        },
+        {
+          "row": 9,
+          "col": 10,
+          "letter": "A",
+          "isBlank": true,
+          "confidence": 0.98,
+          "source": "ocr"
+        },
+        {
+          "row": 9,
+          "col": 11,
+          "letter": "P",
+          "isBlank": false,
+          "confidence": 0.55,
+          "source": "ocr"
+        },
+        {
+          "row": 10,
+          "col": 11,
+          "letter": "E",
+          "isBlank": false,
+          "confidence": 0.71,
+          "source": "ocr"
+        }
+      ],
+      "frameRef": null,
+      "capturedAt": "2026-08-20T14:33:00Z",
+      "note": "blank played as A; two doubtful reads; one tile typed in"
+    },
+    {
+      "index": 4,
+      "player": 0,
+      "annotation": "play",
+      "cells": [
+        {
+          "row": 5,
+          "col": 5,
+          "letter": "Z",
+          "isBlank": false,
+          "confidence": 0.98,
+          "source": "ocr"
+        },
+        {
+          "row": 6,
+          "col": 5,
+          "letter": "A",
+          "isBlank": false,
+          "confidence": null,
+          "source": "manual"
+        },
+        {
+          "row": 7,
+          "col": 5,
+          "letter": "H",
+          "isBlank": false,
+          "confidence": 0.98,
+          "source": "ocr"
+        },
+        {
+          "row": 7,
+          "col": 6,
+          "letter": "E",
+          "isBlank": false,
+          "confidence": 0.98,
+          "source": "ocr"
+        },
+        {
+          "row": 7,
+          "col": 7,
+          "letter": "L",
+          "isBlank": false,
+          "confidence": 0.98,
+          "source": "ocr"
+        },
+        {
+          "row": 7,
+          "col": 8,
+          "letter": "L",
+          "isBlank": false,
+          "confidence": 0.98,
+          "source": "ocr"
+        },
+        {
+          "row": 7,
+          "col": 9,
+          "letter": "O",
+          "isBlank": false,
+          "confidence": 0.98,
+          "source": "ocr"
+        },
+        {
+          "row": 8,
+          "col": 9,
+          "letter": "W",
+          "isBlank": false,
+          "confidence": 0.98,
+          "source": "ocr"
+        },
+        {
+          "row": 9,
+          "col": 9,
+          "letter": "N",
+          "isBlank": false,
+          "confidence": 0.98,
+          "source": "ocr"
+        },
+        {
+          "row": 9,
+          "col": 10,
+          "letter": "A",
+          "isBlank": true,
+          "confidence": 0.98,
+          "source": "ocr"
+        },
+        {
+          "row": 9,
+          "col": 11,
+          "letter": "P",
+          "isBlank": false,
+          "confidence": 0.55,
+          "source": "ocr"
+        },
+        {
+          "row": 10,
+          "col": 11,
+          "letter": "E",
+          "isBlank": false,
+          "confidence": 0.71,
+          "source": "ocr"
+        },
+        {
+          "row": 11,
+          "col": 11,
+          "letter": "Z",
+          "isBlank": false,
+          "confidence": 0.98,
+          "source": "ocr"
+        }
+      ],
+      "frameRef": null,
+      "capturedAt": "2026-08-20T14:34:00Z",
+      "note": "deliberately wrong: two Zs, and only one exists"
+    }
+  ],
+  "currentTurn": 4,
+  "editLog": []
+}
